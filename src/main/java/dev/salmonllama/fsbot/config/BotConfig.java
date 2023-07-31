@@ -9,7 +9,6 @@ import com.kaaz.configuration.ConfigurationBuilder;
 import com.kaaz.configuration.ConfigurationOption;
 import dev.salmonllama.fsbot.utilities.Constants;
 
-import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -73,6 +72,18 @@ public class BotConfig {
 
     @ConfigurationOption
     public static String HOME_SERVER = "Home server here";
+
+    @ConfigurationOption
+    public static String BOT_TOKEN_DEV = "bot token here";
+
+    @ConfigurationOption
+    public static String BOT_TOKEN_PROD = "production token here";
+
+    @ConfigurationOption
+    public static String IMGUR_BEARER = "Bearer token here";
+
+    @ConfigurationOption
+    public static String IMGUR_CLIENT = "client ID here";
 
     public static void initConfig(Path filePath, boolean cleanfile) {
         try {
