@@ -120,9 +120,9 @@ public class ImageListener implements MessageCreateListener {
                 // Log the outfit
 
                 // TODO: START ZAMMY LOG
-                if (outfit.getTag().equals("zammy"))
+                if (outfit.getTag().equals("necro-contest"))
                 {
-                    event.getApi().getServerTextChannelById(BotConfig.ZAMMY_LOG).ifPresentOrElse(chnl ->
+                    event.getApi().getServerTextChannelById(BotConfig.CONTEST_LOG).ifPresentOrElse(chnl ->
                     {
                         EmbedBuilder response = new EmbedBuilder()
                                 .setTitle("Outfit Added")
@@ -139,7 +139,7 @@ public class ImageListener implements MessageCreateListener {
                         }
 
                         chnl.sendMessage(response);
-                        logger.info(String.format("Outfit from %s successfully added to the zammy event.", event.getMessageAuthor().getDiscriminatedName()));
+                        logger.info(String.format("Outfit from %s successfully added to the running event.", event.getMessageAuthor().getDiscriminatedName()));
 
                         // Add the reaction to the original message
                         GalleryController.getEmoji(channel.getIdAsString()).thenAcceptAsync(
@@ -149,7 +149,7 @@ public class ImageListener implements MessageCreateListener {
                     {
                         // Fallback error message to me
                         event.getApi().getUserById(BotConfig.BOT_OWNER).thenAcceptAsync(
-                                user -> user.sendMessage("Could not find OUTFIT LOG")
+                                user -> user.sendMessage("Could not find CONTEST_LOG")
                         );
                     });
                 }

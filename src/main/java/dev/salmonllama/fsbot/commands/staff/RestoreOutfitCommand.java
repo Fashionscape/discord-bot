@@ -79,9 +79,9 @@ public class RestoreOutfitCommand extends Command {
                                 .addField("Restored By:", ctx.getAuthor().getDiscriminatedName());
 
                         // TODO: START ZAMMY
-                        if (outfit.getTag().equals("zammy"))
+                        if (outfit.getTag().equals("necro-contest"))
                         {
-                            ctx.getApi().getServerTextChannelById(BotConfig.ZAMMY_LOG).ifPresent(
+                            ctx.getApi().getServerTextChannelById(BotConfig.CONTEST_LOG).ifPresent(
                                     chnl -> chnl.sendMessage(log)
                             );
                         }
