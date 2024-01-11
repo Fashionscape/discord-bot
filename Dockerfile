@@ -16,4 +16,4 @@ RUN mkdir /app
 
 COPY --from=build /home/gradle/src/build/libs/* /app/fashionscape-bot.jar
 
-ENTRYPOINT ["java","-jar","-Xmx800m","/app/fashionscape-bot.jar"]
+ENTRYPOINT ["java","-jar","-Xmx3500m","/app/fashionscape-bot.jar"]
