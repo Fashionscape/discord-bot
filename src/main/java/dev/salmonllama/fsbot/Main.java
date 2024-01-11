@@ -5,7 +5,7 @@
 package dev.salmonllama.fsbot;
 
 import dev.salmonllama.fsbot.config.BotConfig;
-import dev.salmonllama.fsbot.config.SecretManager;
+// import dev.salmonllama.fsbot.config.SecretManager;
 import dev.salmonllama.fsbot.database.FSDB;
 import dev.salmonllama.fsbot.guthix.Guthix;
 import dev.salmonllama.fsbot.listeners.*;
@@ -25,18 +25,20 @@ public class Main {
     private final static Logger logger = LoggerFactory.getLogger(Main.class);
 
     public static void main(String[] args) {
-        BotConfig.initConfig(Constants.BOT_FOLDER, false); // TODO: Sunset the bot config once and for all
+        BotConfig.initConfig(Constants.BOT_FOLDER, false);
 
         FSDB.init();
 
         String token;
         if (System.getenv("ENVIRONMENT") != null)
         {
-            token = SecretManager.DISCORD_TOKEN_PROD.getPlainText();
+            token = BotConfig.BOT_TOKEN_PROD;
+            // token = SecretManager.DISCORD_TOKEN_PROD.getPlainText();
         }
         else
         {
-            token = SecretManager.DISCORD_TOKEN.getPlainText();
+            token = BotConfig.BOT_TOKEN_DEV;
+            // token = SecretManager.DISCORD_TOKEN.getPlainText();
         }
 
         new DiscordApiBuilder().addIntents(Intent.MESSAGE_CONTENT).setToken(token).login().thenAccept(api -> {

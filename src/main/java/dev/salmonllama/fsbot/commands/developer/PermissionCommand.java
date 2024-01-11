@@ -93,7 +93,7 @@ public class PermissionCommand extends Command {
                                                     perm -> ctx.getApi().getUserById(perm.getUserId()).thenAcceptAsync(
                                                             (discordUser) -> text.append(perm.getUserId())
                                                                     .append(" - ")
-                                                                    .append(discordUser.getDiscriminatedName())
+                                                                    .append(discordUser.getName())
                                                                     .append(System.lineSeparator())
                                                     ).join()
                                             )
@@ -116,13 +116,13 @@ public class PermissionCommand extends Command {
     }
 
     private void add(CommandContext ctx) {
+        String userId;
         if (ctx.getMessage().getMentionedUsers().isEmpty()) {
-            System.out.println("No mentioned users");
-            // If no mentioned users, improper usage
-            return;
+            // If no mentioned users, then the user ID = args[1]
+            userId = ctx.getArgs()[1];
+        } else {
+            userId = ctx.getMessage().getMentionedUsers().get(0).getIdAsString();
         }
-
-        String userId = ctx.getMessage().getMentionedUsers().get(0).getIdAsString();
 
         StaticPermission perm = new StaticPermission.StaticPermissionBuilder(userId).setPermission(ctx.getArgs()[2]).build();
 
@@ -131,19 +131,19 @@ public class PermissionCommand extends Command {
                     .setTitle("Permissions Added")
                     .addField("User:", userId)
                     .addField("Permission:", ctx.getArgs()[2]);
-
             ctx.reply(response);
         });
     }
 
     private void remove(CommandContext ctx) { // TODO: Remove is not functional
-        if (ctx.getMessage().getMentionedUsers().isEmpty()) {
-            // If no mentioned users, improper usage
-            return;
-        }
+        String userId = ctx.getArgs()[1];
 
-        String userId = ctx.getMessage().getMentionedUsers().get(0).getIdAsString();
-
-        StaticPermissionController.delete(userId, ctx.getArgs()[2]).thenAcceptAsync((Void) -> System.out.println("Permission removed")).exceptionally(ExceptionLogger.get());
+        StaticPermissionController.delete(userId, ctx.getArgs()[2]).thenAcceptAsync((Void) -> {
+            EmbedBuilder response = new EmbedBuilder()
+                    .setTitle("Permissions Removed")
+                    .addField("User:", userId)
+                    .addField("Permission:", ctx.getArgs()[2]);
+            ctx.reply(response);
+        }).exceptionally(ExceptionLogger.get());
     }
 }
