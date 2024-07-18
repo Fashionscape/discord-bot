@@ -9,6 +9,9 @@ import dev.salmonllama.fsbot.config.BotConfig;
 import dev.salmonllama.fsbot.database.FSDB;
 import dev.salmonllama.fsbot.guthix.Guthix;
 import dev.salmonllama.fsbot.listeners.*;
+import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.requests.GatewayIntent;
 import org.javacord.api.DiscordApiBuilder;
 
 import dev.salmonllama.fsbot.utilities.Constants;
@@ -17,6 +20,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+import java.util.EnumSet;
 
 
 @SpringBootApplication
@@ -41,13 +46,16 @@ public class Main {
             // token = SecretManager.DISCORD_TOKEN.getPlainText();
         }
 
+        JDA jda = JDABuilder.createLight(token, EnumSet.noneOf(GatewayIntent.class))
+                .addEventListeners(new ImageListener())
+                .build();
+
         new DiscordApiBuilder().addIntents(Intent.MESSAGE_CONTENT).setToken(token).login().thenAccept(api -> {
 
             @SuppressWarnings("unused")
             Guthix guthix = new Guthix(api);
 
             // Register listeners
-            api.addMessageCreateListener(new ImageListener());
             api.addServerMemberJoinListener(new NewMemberListener());
             api.addServerJoinListener(new ServerJoined());
             api.addMessageCreateListener(new ThumbsListener());
