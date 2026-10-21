@@ -3,20 +3,20 @@
  */
 
 plugins {
-    id 'org.springframework.boot' version '2.5.4'
+    id 'java'
+    id 'org.springframework.boot' version '3.3.4'
+    id 'io.spring.dependency-management' version '1.1.6'
     id 'application'
 }
 
-jar {
-    enabled = false
+group = 'dev.salmonllama'
+version = '3.0.0-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
-
-apply plugin: 'io.spring.dependency-management'
-
-group 'dev.salmonllama'
-version '2.1.1'
-
-sourceCompatibility = 16
 
 repositories {
     mavenCentral()
@@ -26,25 +26,30 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.xerial:sqlite-jdbc:3.41.2.2'
-    implementation 'org.postgresql:postgresql:42.2.24'
+    // Spring Boot Starters
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    // Database & legacy transition dependencies
+    implementation 'org.xerial:sqlite-jdbc:3.46.1.0'
+    implementation 'org.postgresql:postgresql:42.7.4'
     implementation 'com.github.Kaaz:ConfigurationBuilder:0.4'
     implementation 'org.javacord:javacord:3.8.0'
     implementation 'com.vdurmont:emoji-java:5.1.1'
-    implementation 'com.squareup.okhttp3:okhttp:4.9.1'
-    implementation 'ch.qos.logback:logback-classic:1.2.5'
-    implementation 'com.google.code.gson:gson:2.8.8'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.google.code.gson:gson:2.11.0'
 
-    implementation 'org.springframework.boot:spring-boot-starter-actuator:2.5.4'
-    implementation 'org.springframework.boot:spring-boot-starter-web:2.5.4'
-//    implementation 'org.springframework.boot:spring-boot-starter-data-jpa:2.5.4'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test:2.5.4'
-
-    implementation platform('com.google.cloud:libraries-bom:23.0.0')
-    implementation 'com.google.cloud:google-cloud-secretmanager'
-
-
-    testImplementation group: 'junit', name: 'junit', version: '4.12'
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-mainClassName = 'dev.salmonllama.fsbot.Main'
+application {
+    mainClass = 'dev.salmonllama.fsbot.Main'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

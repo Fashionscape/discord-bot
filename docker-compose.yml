@@ -1,0 +1,55 @@
+services:
+  bot:
+    image: ${FSBOT_IMAGE:-ghcr.io/fashionscape/discord-bot:latest}
+    container_name: fsbot
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: fsbot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fashionscape}
+      POSTGRES_USER: ${SPRING_DATASOURCE_USERNAME:-fsbot}
+      POSTGRES_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-fsbot_change_me_in_production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SPRING_DATASOURCE_USERNAME:-fsbot} -d ${POSTGRES_DB:-fashionscape}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: fsbot-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  minio_data:

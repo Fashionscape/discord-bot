@@ -1,0 +1,30 @@
+fsbot:
+  discord:
+    token: ${FSBOT_DISCORD_TOKEN:}
+    owner-id: ${FSBOT_OWNER_ID:0}
+    dev-guild-id: ${FSBOT_DEV_GUILD_ID:}
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY:minioadmin}
+    bucket: ${MINIO_BUCKET:fashionscape-outfits}
+    public-url: ${MINIO_PUBLIC_URL:https://media.fashionscape.org}
+
+spring:
+  application:
+    name: fashionscape-bot
+  threads:
+    virtual:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+server:
+  port: ${SERVER_PORT:8080}

@@ -1,19 +1,15 @@
-FROM gradle:7.2.0-jdk16 AS build
+FROM gradle:8.10.2-jdk21 AS build
 
 COPY --chown=gradle:gradle . /home/gradle/src
 WORKDIR /home/gradle/src
-RUN gradle clean --no-daemon
-RUN gradle build --no-daemon
+RUN gradle bootJar -x test --no-daemon
 
-FROM openjdk:16
+FROM eclipse-temurin:21-jre-jammy
 
 EXPOSE 8080
 
-ENV ENVIRONMENT=PROD
-ENV GOOGLE_APPLICATION_CREDENTIALS=/root/.fsbot/google_application_credentials.json
-
 RUN mkdir /app
 
-COPY --from=build /home/gradle/src/build/libs/* /app/fashionscape-bot.jar
+COPY --from=build /home/gradle/src/build/libs/*.jar /app/fashionscape-bot.jar
 
-ENTRYPOINT ["java","-jar","-Xmx3500m","/app/fashionscape-bot.jar"]
+ENTRYPOINT ["java", "-jar", "-Xmx3500m", "/app/fashionscape-bot.jar"]
