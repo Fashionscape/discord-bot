@@ -30,3 +30,9 @@ config.properties
 
 # Ignore the bot config
 bot.config
+
+# Ignore environment secret files
+.env
+.env.*
+!.env.example
+!example.env
