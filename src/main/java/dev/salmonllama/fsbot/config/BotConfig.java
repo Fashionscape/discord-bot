@@ -12,7 +12,11 @@ import dev.salmonllama.fsbot.utilities.Constants;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class BotConfig {
+    private static final Logger logger = LoggerFactory.getLogger(BotConfig.class);
     @ConfigurationOption
     public static String DB_ADDR = "SQLite connection address here";
 
@@ -89,8 +93,7 @@ public class BotConfig {
         try {
             new ConfigurationBuilder(BotConfig.class, Paths.get(filePath.toString(), Constants.CONFIG_NAME) .toFile()).build(cleanfile);
         } catch (Exception e) {
-            e.printStackTrace();
-            System.exit(1);
+            logger.warn("Legacy bot.config could not be loaded from {}: {}", filePath, e.getMessage());
         }
     }
 }

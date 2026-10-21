@@ -17,9 +17,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class Main {
 
     private final static Logger logger = LoggerFactory.getLogger(Main.class);
@@ -33,29 +34,31 @@ public class Main {
         if (System.getenv("ENVIRONMENT") != null)
         {
             token = BotConfig.BOT_TOKEN_PROD;
-            // token = SecretManager.DISCORD_TOKEN_PROD.getPlainText();
         }
         else
         {
             token = BotConfig.BOT_TOKEN_DEV;
-            // token = SecretManager.DISCORD_TOKEN.getPlainText();
         }
 
-        new DiscordApiBuilder().addIntents(Intent.MESSAGE_CONTENT).setToken(token).login().thenAccept(api -> {
+        if (token != null && !token.isBlank() && !token.contains("here")) {
+            new DiscordApiBuilder().addIntents(Intent.MESSAGE_CONTENT).setToken(token).login().thenAccept(api -> {
 
-            @SuppressWarnings("unused")
-            Guthix guthix = new Guthix(api);
+                @SuppressWarnings("unused")
+                Guthix guthix = new Guthix(api);
 
-            // Register listeners
-            api.addMessageCreateListener(new ImageListener());
-            api.addServerMemberJoinListener(new NewMemberListener());
-            api.addServerJoinListener(new ServerJoined());
-            api.addMessageCreateListener(new ThumbsListener());
-            api.addMessageCreateListener(new AchievementListener());
-            api.addMessageCreateListener(new ReportListener());
+                // Register listeners
+                api.addMessageCreateListener(new ImageListener());
+                api.addServerMemberJoinListener(new NewMemberListener());
+                api.addServerJoinListener(new ServerJoined());
+                api.addMessageCreateListener(new ThumbsListener());
+                api.addMessageCreateListener(new AchievementListener());
+                api.addMessageCreateListener(new ReportListener());
 
-            logger.info("{} reporting for duty", api.getYourself().getDiscriminatedName());
-        });
+                logger.info("{} reporting for duty", api.getYourself().getDiscriminatedName());
+            });
+        } else {
+            logger.warn("No valid Discord token configured. Skipping legacy Discord gateway login.");
+        }
 
         SpringApplication.run(Main.class, args);
     }
