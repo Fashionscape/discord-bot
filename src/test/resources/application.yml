@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: fashionscape-bot-test
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+fsbot:
+  discord:
+    token: ""
+    owner-id: 123456789
+  minio:
+    endpoint: http://localhost:9000

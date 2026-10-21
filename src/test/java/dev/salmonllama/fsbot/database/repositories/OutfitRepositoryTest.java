@@ -1,0 +1,118 @@
+/*
+ * Copyright (c) 2021 Aleksei Gryczewski
+ */
+
+package dev.salmonllama.fsbot.database.repositories;
+
+import dev.salmonllama.fsbot.database.entities.OutfitEntity;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@DataJpaTest
+class OutfitRepositoryTest {
+
+    @Autowired
+    private OutfitRepository outfitRepository;
+
+    @BeforeEach
+    void setUp() {
+        outfitRepository.deleteAll();
+
+        OutfitEntity outfit1 = new OutfitEntity(
+                "outfit-1",
+                "https://media.fashionscape.org/outfit1.png",
+                "user-100",
+                "zammy",
+                "meta info",
+                "Zamorakian",
+                Instant.now(),
+                Instant.now(),
+                false,
+                true,
+                5,
+                "del-hash-1"
+        );
+
+        OutfitEntity outfit2 = new OutfitEntity(
+                "outfit-2",
+                "https://media.fashionscape.org/outfit2.png",
+                "user-200",
+                "sara",
+                null,
+                "Saradominist",
+                Instant.now(),
+                Instant.now(),
+                false,
+                false,
+                2,
+                "del-hash-2"
+        );
+
+        OutfitEntity deletedOutfit = new OutfitEntity(
+                "outfit-deleted",
+                "https://media.fashionscape.org/deleted.png",
+                "user-100",
+                "guthix",
+                null,
+                "Guthixian",
+                Instant.now(),
+                Instant.now(),
+                true,
+                false,
+                0,
+                null
+        );
+
+        outfitRepository.saveAll(List.of(outfit1, outfit2, deletedOutfit));
+    }
+
+    @Test
+    void testFindByDeletedFalse() {
+        List<OutfitEntity> activeOutfits = outfitRepository.findByDeletedFalse();
+        assertEquals(2, activeOutfits.size());
+    }
+
+    @Test
+    void testFindByIdAndDeletedFalse() {
+        Optional<OutfitEntity> outfit = outfitRepository.findByIdAndDeletedFalse("outfit-1");
+        assertTrue(outfit.isPresent());
+        assertEquals("user-100", outfit.get().getSubmitter());
+
+        Optional<OutfitEntity> deleted = outfitRepository.findByIdAndDeletedFalse("outfit-deleted");
+        assertFalse(deleted.isPresent());
+    }
+
+    @Test
+    void testFindBySubmitterAndDeletedFalse() {
+        List<OutfitEntity> outfits = outfitRepository.findBySubmitterAndDeletedFalse("user-100");
+        assertEquals(1, outfits.size());
+        assertEquals("outfit-1", outfits.get(0).getId());
+    }
+
+    @Test
+    void testFindByTagIgnoreCaseAndDeletedFalse() {
+        List<OutfitEntity> outfits = outfitRepository.findByTagIgnoreCaseAndDeletedFalse("ZAMMY");
+        assertEquals(1, outfits.size());
+        assertEquals("outfit-1", outfits.get(0).getId());
+    }
+
+    @Test
+    void testFindRandomOutfit() {
+        Optional<OutfitEntity> random = outfitRepository.findRandomOutfit();
+        assertTrue(random.isPresent());
+        assertFalse(random.get().isDeleted());
+    }
+
+    @Test
+    void testCountByDeletedFalse() {
+        assertEquals(2, outfitRepository.countByDeletedFalse());
+    }
+}
