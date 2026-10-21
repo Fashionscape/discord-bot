@@ -27,7 +27,8 @@ FashionScape Bot (`fsbot`) v3 is a major architectural overhaul designed to elim
 | **ORM / Data Access** | Custom JDBC queries in `DatabaseProvider` | **Spring Data JPA (Hibernate 6) + HikariCP** | Type-safe entities, repositories, managed connection pooling. |
 | **Migrations** | Static SQL string schemas in models | **Flyway 10+** | Versioned, repeatable, and audit-friendly database evolutions. |
 | **Media Storage** | Imgur API via OkHttp | **MinIO (S3)** via `io.minio:minio` | Self-hosted, reliable, no third-party rate limits or API key quotas. |
-| **Configuration** | Kaaz `ConfigurationBuilder` (`~/.fsbot/bot.config`) | **`application.yml` + `@ConfigurationProperties`** | Standard 12-factor configuration via environment variables. |
+| **Configuration** | Kaaz `ConfigurationBuilder` (`~/.fsbot/bot.config`) | **`application.yml` + `@ConfigurationProperties`** | Standard 12-factor configuration via environment variables and `.env`. |
+| **Container Registry & Orchestration** | Local Dockerfile (`docker run`) | **GitHub Container Registry (`ghcr.io`) + Docker Compose** | Automated image builds and publishing on commit/release; turnkey container orchestration. |
 | **Testing** | JUnit 4 (empty test suite) | **JUnit 5 + Testcontainers** | Real PostgreSQL & MinIO ephemeral containers for integration tests. |
 
 ---
@@ -175,7 +176,7 @@ spring:
 
 ```mermaid
 flowchart TD
-    P1["Phase 1: Build & Foundation\n• Gradle 8.10 & Java 21\n• Spring Boot 3.3 Setup\n• Dockerfile & Config"]
+    P1["Phase 1: Build & Foundation\n• Gradle 8.10 & Java 21\n• Spring Boot 3.3 Setup\n• Dockerfile & Config\n• GHCR CI/CD & Compose"]
     P2["Phase 2: Database & Migration\n• Flyway Schemas\n• BlockedUser & BlockedServer Entities\n• SQLite Import CLI"]
     P3["Phase 3: MinIO Storage\n• MinioClient Configuration\n• Image Upload & Public CDN\n• Imgur-to-MinIO Rehost CLI"]
     P4["Phase 4: JDA 5 & Discord Slash Engine\n• JDA 5 Virtual Thread Setup\n• Slash Command Registry\n• Gallery Listener & Buttons"]
@@ -191,6 +192,9 @@ flowchart TD
 - Upgrade `build.gradle` to Spring Boot 3.3.4, Java 21 toolchain.
 - Update Dockerfile to multi-stage Eclipse Temurin JDK 21 build.
 - Set up `application.yml` with `@ConfigurationProperties(prefix = "fsbot")`.
+- Add `example.env` declaring all required configuration variables and secrets.
+- Add GitHub Actions CI/CD to build and publish Docker container images to GitHub Container Registry (`ghcr.io`).
+- Add `docker-compose.yml` specification configuring the bot container (using the GHCR image) alongside PostgreSQL and MinIO services.
 
 #### Phase 2: Persistence & SQLite Data Migration (`feature/v3-phase2-database`)
 - Add `postgresql`, `flyway-core`, `spring-boot-starter-data-jpa`.
