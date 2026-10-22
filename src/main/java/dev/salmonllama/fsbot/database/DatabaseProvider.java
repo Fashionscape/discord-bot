@@ -8,6 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sqlite.javax.SQLiteConnectionPoolDataSource;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.*;
 
@@ -20,7 +22,12 @@ public class DatabaseProvider {
 
     public DatabaseProvider(String dbName) {
         DB_NAME = dbName;
-        Path addr = Path.of(Constants.BOT_FOLDER.toString(), "This/is/going/away/soon/anyways");
+        try {
+            Files.createDirectories(Constants.BOT_FOLDER);
+        } catch (IOException e) {
+            logger.error("Could not create bot config directory: {}", Constants.BOT_FOLDER, e);
+        }
+        Path addr = Constants.BOT_FOLDER.resolve(Constants.DB_NAME + ".db");
         DB_ADDR = "jdbc:sqlite:".concat(addr.toString());
 
         logger.info("Initializing database...");
@@ -35,11 +42,9 @@ public class DatabaseProvider {
             c = dataSource.getConnection();
             return c;
         } catch (SQLException e) {
-            e.printStackTrace();
-            System.out.println("Could not connect to database, double check config values");
-            System.exit(1);
+            logger.error("Could not connect to database at {}: {}", DB_ADDR, e.getMessage());
+            throw new RuntimeException("Could not connect to database: " + DB_ADDR, e);
         }
-        return null;
     }
 
     public Connection getConnection() {
