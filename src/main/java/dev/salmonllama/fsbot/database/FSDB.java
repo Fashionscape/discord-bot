@@ -5,7 +5,6 @@
 // Heavily inspired by Kaaz's Emily database connection: https://github.com/Kaaz/DiscordBot/tree/master/src/main/java/emily/db
 package dev.salmonllama.fsbot.database;
 
-import dev.salmonllama.fsbot.config.BotConfig;
 import dev.salmonllama.fsbot.database.models.*;
 
 import java.sql.SQLException;
@@ -30,7 +29,7 @@ public class FSDB {
 
     public static void init() {
         connections.clear();
-        connections.put(DEFAULT_CONNECTION, new DatabaseProvider(BotConfig.DB_NAME));
+        connections.put(DEFAULT_CONNECTION, new DatabaseProvider("This is going away soon"));
 
         prepareTables();
     }

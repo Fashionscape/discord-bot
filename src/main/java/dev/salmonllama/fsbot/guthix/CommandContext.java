@@ -12,8 +12,10 @@ import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.entity.permission.Role;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
-import dev.salmonllama.fsbot.config.BotConfig;
 import org.javacord.api.event.message.MessageCreateEvent;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import dev.salmonllama.fsbot.config.BotProperties;
 
 import java.util.Collection;
 import java.util.Optional;
@@ -29,6 +31,9 @@ public class CommandContext {
     private Command usedCommand;
     private String usedAlias;
     private String[] args;
+
+    @Autowired 
+    BotProperties properties;
 
     private CommandContext(CommandContextBuilder builder) {
         this.event = builder.event;
@@ -92,7 +97,7 @@ public class CommandContext {
     }
 
     public boolean isUserOwner() {
-        return getUser().getIdAsString().equals(BotConfig.BOT_OWNER);
+        return getUser().getId() == (properties.discord().ownerId());
     }
 
     public boolean isPrivateMessage() {

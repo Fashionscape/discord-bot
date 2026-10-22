@@ -6,7 +6,6 @@
 package dev.salmonllama.fsbot.database;
 
 import dev.salmonllama.fsbot.exceptions.UnknownParameterException;
-import dev.salmonllama.fsbot.config.BotConfig;
 import dev.salmonllama.fsbot.utilities.Constants;
 
 import org.slf4j.Logger;
@@ -25,7 +24,7 @@ public class DatabaseProvider {
 
     public DatabaseProvider(String dbName) {
         DB_NAME = dbName;
-        Path addr = Path.of(Constants.BOT_FOLDER.toString(), BotConfig.DB_ADDR);
+        Path addr = Path.of(Constants.BOT_FOLDER.toString(), "This/is/going/away/soon/anyways");
         DB_ADDR = "jdbc:sqlite:".concat(addr.toString());
 
         logger.info("Initializing database...");

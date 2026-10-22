@@ -4,8 +4,6 @@
 
 package dev.salmonllama.fsbot.listeners;
 
-import com.vdurmont.emoji.EmojiParser;
-import dev.salmonllama.fsbot.config.BotConfig;
 import dev.salmonllama.fsbot.database.controllers.GalleryController;
 import dev.salmonllama.fsbot.database.controllers.OutfitController;
 import dev.salmonllama.fsbot.database.controllers.UserBlacklistController;
@@ -17,15 +15,12 @@ import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.event.message.MessageCreateEvent;
 import org.javacord.api.listener.message.MessageCreateListener;
 import org.javacord.api.util.logging.ExceptionLogger;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.awt.Color;
 
 import java.util.UUID;
 
 public class ImageListener implements MessageCreateListener {
-    private static final Logger logger = LoggerFactory.getLogger(ImageListener.class);
 
     @Override
     public void onMessageCreate(MessageCreateEvent event) {
@@ -119,70 +114,35 @@ public class ImageListener implements MessageCreateListener {
             OutfitController.insert(outfit).thenAcceptAsync((Void) -> {
                 // Log the outfit
 
-                // TODO: START ZAMMY LOG
-                if (outfit.getTag().equals("necro-contest"))
-                {
-                    event.getApi().getServerTextChannelById(BotConfig.CONTEST_LOG).ifPresentOrElse(chnl ->
-                    {
-                        EmbedBuilder response = new EmbedBuilder()
-                                .setTitle("Outfit Added")
-                                .setAuthor(event.getMessageAuthor())
-                                .setThumbnail(outfit.getLink())
-                                .setFooter(String.format("%s | %s", outfit.getTag(), outfit.getId()))
-                                .setUrl(outfit.getLink())
-                                .setColor(Color.GREEN)
-                                .addField("Uploaded:", outfit.getCreated().toString())
-                                .addField("Discord Name:", outfit.getDiscordName());
+                // TODO: When completing the JDA refactor, this logging needs to be reconfigured and enabled.
+                // event.getApi().getServerTextChannelById(BotConfig.OUTFIT_LOG).ifPresentOrElse(chnl -> {
+                //     EmbedBuilder response = new EmbedBuilder()
+                //             .setTitle("Outfit Added")
+                //             .setAuthor(event.getMessageAuthor())
+                //             .setThumbnail(outfit.getLink())
+                //             .setFooter(String.format("%s | %s", outfit.getTag(), outfit.getId()))
+                //             .setUrl(outfit.getLink())
+                //             .setColor(Color.GREEN)
+                //             .addField("Uploaded:", outfit.getCreated().toString())
+                //             .addField("Discord Name:", outfit.getDiscordName());
 
-                        if (!outfit.getMeta().equals("")) {
-                            response.addField("Meta:", outfit.getMeta());
-                        }
+                //     if (!outfit.getMeta().equals("")) {
+                //         response.addField("Meta:", outfit.getMeta());
+                //     }
 
-                        chnl.sendMessage(response);
-                        logger.info(String.format("Outfit from %s successfully added to the running event.", event.getMessageAuthor().getDiscriminatedName()));
+                //     chnl.sendMessage(response);
+                //     logger.info(String.format("Outfit from %s successfully added.", event.getMessageAuthor().getDiscriminatedName()));
 
-                        // Add the reaction to the original message
-                        GalleryController.getEmoji(channel.getIdAsString()).thenAcceptAsync(
-                                emoji -> event.getMessage().addReaction(EmojiParser.parseToUnicode(emoji))
-                        ).exceptionally(ExceptionLogger.get());
-                    }, () ->
-                    {
-                        // Fallback error message to me
-                        event.getApi().getUserById(BotConfig.BOT_OWNER).thenAcceptAsync(
-                                user -> user.sendMessage("Could not find CONTEST_LOG")
-                        );
-                    });
-                }
-                // TODO: END ZAMMY LOG
-
-                event.getApi().getServerTextChannelById(BotConfig.OUTFIT_LOG).ifPresentOrElse(chnl -> {
-                    EmbedBuilder response = new EmbedBuilder()
-                            .setTitle("Outfit Added")
-                            .setAuthor(event.getMessageAuthor())
-                            .setThumbnail(outfit.getLink())
-                            .setFooter(String.format("%s | %s", outfit.getTag(), outfit.getId()))
-                            .setUrl(outfit.getLink())
-                            .setColor(Color.GREEN)
-                            .addField("Uploaded:", outfit.getCreated().toString())
-                            .addField("Discord Name:", outfit.getDiscordName());
-
-                    if (!outfit.getMeta().equals("")) {
-                        response.addField("Meta:", outfit.getMeta());
-                    }
-
-                    chnl.sendMessage(response);
-                    logger.info(String.format("Outfit from %s successfully added.", event.getMessageAuthor().getDiscriminatedName()));
-
-                    // Add the reaction to the original message
-                    GalleryController.getEmoji(channel.getIdAsString()).thenAcceptAsync(
-                            emoji -> event.getMessage().addReaction(EmojiParser.parseToUnicode(emoji))
-                    ).exceptionally(ExceptionLogger.get());
-                }, () -> {
-                    // Fallback error message to me
-                    event.getApi().getUserById(BotConfig.BOT_OWNER).thenAcceptAsync(
-                            user -> user.sendMessage("Could not find OUTFIT LOG")
-                    );
-                });
+                //     // Add the reaction to the original message
+                //     GalleryController.getEmoji(channel.getIdAsString()).thenAcceptAsync(
+                //             emoji -> event.getMessage().addReaction(EmojiParser.parseToUnicode(emoji))
+                //     ).exceptionally(ExceptionLogger.get());
+                // }, () -> {
+                //     // Fallback error message to me
+                //     event.getApi().getUserById(BotConfig.BOT_OWNER).thenAcceptAsync(
+                //             user -> user.sendMessage("Could not find OUTFIT LOG")
+                //     );
+                // });
             });
         });
     }

@@ -4,7 +4,6 @@
 
 package dev.salmonllama.fsbot.commands.general;
 
-import dev.salmonllama.fsbot.config.BotConfig;
 import dev.salmonllama.fsbot.guthix.*;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
@@ -35,7 +34,7 @@ public class HelpCommand extends Command {
         String[] args = ctx.getArgs();
         TextChannel channel = ctx.getChannel();
 
-        String prefix = BotConfig.DEFAULT_PREFIX;
+        String prefix = "~";
 
         if (args.length == 0) {
             channel.sendMessage(buildCategoryHelp(prefix));

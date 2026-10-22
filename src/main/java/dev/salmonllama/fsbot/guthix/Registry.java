@@ -4,7 +4,6 @@
 
 package dev.salmonllama.fsbot.guthix;
 
-import dev.salmonllama.fsbot.config.BotConfig;
 
 import java.util.*;
 import java.util.function.Predicate;
@@ -37,7 +36,7 @@ class Registry {
     }
 
     boolean startsWithPrefix(String input) {
-        return input.startsWith(BotConfig.DEFAULT_PREFIX);
+        return input.startsWith("~");
     }
 
     Collection<String> getCommandAliases() {
@@ -64,7 +63,7 @@ class Registry {
     }
 
     String removePrefix(String input) {
-        int startPoint = BotConfig.DEFAULT_PREFIX.length();
+        int startPoint = "~".length();
         return input.substring(startPoint);
     }
 

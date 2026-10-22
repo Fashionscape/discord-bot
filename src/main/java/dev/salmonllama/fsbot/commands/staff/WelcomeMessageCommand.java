@@ -4,7 +4,6 @@
 
 package dev.salmonllama.fsbot.commands.staff;
 
-import dev.salmonllama.fsbot.config.BotConfig;
 import dev.salmonllama.fsbot.database.controllers.ServerConfigController;
 import dev.salmonllama.fsbot.database.models.ServerConfig;
 import dev.salmonllama.fsbot.guthix.*;
@@ -95,7 +94,7 @@ public class WelcomeMessageCommand extends Command {
         // Creates a new server config and adds a welcome message
         ServerConfig config = new ServerConfig.ServerConfigBuilder()
                 .setId(serverId)
-                .setPrefix(BotConfig.DEFAULT_PREFIX)
+                .setPrefix("~")
                 .setWelcomeMessage(newMsg)
                 .build();
 

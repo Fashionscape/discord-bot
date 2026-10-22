@@ -5,7 +5,6 @@
 package dev.salmonllama.fsbot.commands.staff;
 
 import com.vdurmont.emoji.EmojiParser;
-import dev.salmonllama.fsbot.config.BotConfig;
 import dev.salmonllama.fsbot.database.controllers.OutfitController;
 import dev.salmonllama.fsbot.database.models.Outfit;
 import dev.salmonllama.fsbot.guthix.*;
@@ -81,18 +80,6 @@ public class RetagCommand extends Command {
                                     .setThumbnail(outfit.getLink())
                                     .addField("New tag:", newTag);
 
-                            // TODO: START ZAMMY
-                            if (outfit.getTag().equals("necro-contest"))
-                            {
-                                ctx.getApi().getServerTextChannelById(BotConfig.CONTEST_LOG).ifPresent(
-                                        chnl -> chnl.sendMessage(log)
-                                );
-                            }
-                            // TODO: END ZAMMY
-
-                            ctx.getApi().getServerTextChannelById(BotConfig.OUTFIT_LOG).ifPresent(
-                                    chnl -> chnl.sendMessage(log)
-                            );
                         });
 
                     } else if (event.getEmoji().equalsEmoji(EmojiParser.parseToUnicode(":octagonal_sign:"))) {

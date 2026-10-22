@@ -5,7 +5,6 @@
 package dev.salmonllama.fsbot.commands.staff;
 
 import com.vdurmont.emoji.EmojiParser;
-import dev.salmonllama.fsbot.config.BotConfig;
 import dev.salmonllama.fsbot.database.controllers.OutfitController;
 import dev.salmonllama.fsbot.guthix.*;
 import org.javacord.api.entity.channel.TextChannel;
@@ -77,19 +76,6 @@ public class RestoreOutfitCommand extends Command {
                                 .setThumbnail(outfit.getLink())
                                 .setColor(Color.BLUE)
                                 .addField("Restored By:", ctx.getAuthor().getDiscriminatedName());
-
-                        // TODO: START ZAMMY
-                        if (outfit.getTag().equals("necro-contest"))
-                        {
-                            ctx.getApi().getServerTextChannelById(BotConfig.CONTEST_LOG).ifPresent(
-                                    chnl -> chnl.sendMessage(log)
-                            );
-                        }
-                        // TODO: END ZAMMY
-
-                        ctx.getApi().getServerTextChannelById(BotConfig.OUTFIT_LOG).ifPresent(
-                                chnl -> chnl.sendMessage(log)
-                        );
 
                     } else if (event.getEmoji().equalsEmoji(EmojiParser.parseToUnicode(":octagonal_sign:"))) {
                         // Do nothing
