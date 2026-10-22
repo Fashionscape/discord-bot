@@ -1,18 +1,5 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.database.controllers;
 
-import dev.salmonllama.fsbot.database.FSDB;
-
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 
 public class ColorRoleController {
     // Need insert, get by color, exists by color, exists by role, get by server, count, and delete

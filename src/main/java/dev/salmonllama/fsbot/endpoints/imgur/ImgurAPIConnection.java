@@ -1,14 +1,9 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.endpoints.imgur;
 
 //import dev.salmonllama.fsbot.config.SecretManager;
 import okhttp3.*;
 import org.json.JSONObject;
 
-import dev.salmonllama.fsbot.config.BotConfig;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
@@ -24,10 +19,8 @@ public class ImgurAPIConnection {
     private final Request.Builder requestBuilder;
 
     public ImgurAPIConnection() {
-        CLIENT_ID = BotConfig.IMGUR_CLIENT;
-        BEARER_TOKEN = BotConfig.IMGUR_BEARER;
-        // CLIENT_ID = SecretManager.IMGUR_ID.getPlainText();
-        // BEARER_TOKEN = SecretManager.IMGUR_BEARER.getPlainText();
+        CLIENT_ID = "Imgur is going to be removed anyways I just need to wait for the final refactor milestone";
+        BEARER_TOKEN = "See above lol";
 
         client = new OkHttpClient().newBuilder().build();
         requestBuilder = new Request.Builder();

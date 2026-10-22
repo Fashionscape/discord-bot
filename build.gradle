@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 plugins {
     id 'java'
     id 'org.springframework.boot' version '3.3.4'
@@ -38,6 +34,9 @@ dependencies {
     implementation 'org.flywaydb:flyway-core'
     implementation 'org.flywaydb:flyway-database-postgresql'
     implementation 'org.xerial:sqlite-jdbc:3.46.1.0'
+
+    // Object Storage
+    implementation 'io.minio:minio:8.5.12'
 
     // Legacy transition dependencies
     implementation 'com.github.Kaaz:ConfigurationBuilder:0.4'

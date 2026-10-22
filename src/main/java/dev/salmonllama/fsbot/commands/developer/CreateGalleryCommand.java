@@ -1,11 +1,6 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.commands.developer;
 
 import com.vdurmont.emoji.EmojiParser;
-import dev.salmonllama.fsbot.config.BotConfig;
 import dev.salmonllama.fsbot.database.controllers.GalleryController;
 import dev.salmonllama.fsbot.database.models.GalleryChannel;
 import dev.salmonllama.fsbot.guthix.*;
@@ -52,7 +47,7 @@ public class CreateGalleryCommand extends Command {
         if (args.length == 2) {
             emoji = EmojiParser.parseToAliases(args[1]);
         } else {
-            emoji = BotConfig.DEFAULT_REACTION;
+            emoji = ":heartpulse:";
         }
 
         GalleryChannel.GalleryBuilder galleryBuilder = new GalleryChannel.GalleryBuilder();

@@ -1,19 +1,13 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.commands.staff;
 
 import dev.salmonllama.fsbot.database.controllers.OutfitController;
 import dev.salmonllama.fsbot.guthix.*;
-import dev.salmonllama.fsbot.listeners.ForceDeleteAttachedListener;
 import org.javacord.api.entity.message.MessageBuilder;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 public class ForceDeleteCommand extends Command {
     @Override public String name() { return "Force Delete"; }
@@ -61,25 +55,6 @@ public class ForceDeleteCommand extends Command {
 
             builder.setEmbed(embed);
 
-            builder.send(ctx.getChannel()).thenAcceptAsync(msg -> {
-                // Add the event listeners and check for YES/NO
-                var fdal = new ForceDeleteAttachedListener(ctx);
-                ctx.getChannel().addMessageCreateListener(fdal);
-
-                ctx.getChannel().addMessageCreateListener(event -> {
-                    if (event.getMessageAuthor().getIdAsString().equals(ctx.getAuthor().getIdAsString())) {
-                        // If it's the same user, do the things
-                        if (event.getMessageContent().equals("YES")) {
-                            // ForceRemove the outfit
-                        } else if (event.getMessageContent().equals("NO")) {
-                            // Abort the operation. Delete the message.
-
-                        } else {
-                            ctx.reply("Response must be YES or NO. In caps. Because shouting increases security.");
-                        }
-                    }
-                }).removeAfter(5, TimeUnit.MINUTES);
-            });
         }, () -> ctx.reply("An outfit with that ID was not found.")));
     }
 }

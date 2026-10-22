@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.listeners;
 
 import org.javacord.api.event.server.ServerJoinEvent;

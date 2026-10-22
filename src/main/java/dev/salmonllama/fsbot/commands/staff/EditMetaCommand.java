@@ -1,11 +1,6 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.commands.staff;
 
 import com.vdurmont.emoji.EmojiParser;
-import dev.salmonllama.fsbot.config.BotConfig;
 import dev.salmonllama.fsbot.database.controllers.OutfitController;
 import dev.salmonllama.fsbot.guthix.*;
 import org.apache.logging.log4j.util.Strings;
@@ -77,18 +72,6 @@ public class EditMetaCommand extends Command {
                                 .setColor(Color.YELLOW)
                                 .addField("Edited By:", ctx.getAuthor().getDiscriminatedName());
 
-                        // TODO: START ZAMMY
-                        if (outfit.getTag().equals("necro-contest"))
-                        {
-                            ctx.getApi().getServerTextChannelById(BotConfig.CONTEST_LOG).ifPresent(
-                                    chnl -> chnl.sendMessage(log)
-                            );
-                        }
-                        // TODO: END ZAMMY
-
-                        ctx.getApi().getServerTextChannelById(BotConfig.OUTFIT_LOG).ifPresent(
-                                chnl -> chnl.sendMessage(log)
-                        );
 
                     } else if (event.getEmoji().equalsEmoji(EmojiParser.parseToUnicode(":octagonal_sign:"))) {
                         // Do nothing

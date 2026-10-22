@@ -1,13 +1,8 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.commands.osrssearch;
 
 import dev.salmonllama.fsbot.endpoints.scapefashion.ScapeFashionConnection;
 import dev.salmonllama.fsbot.endpoints.scapefashion.ScapeFashionSlotOsrs;
 import dev.salmonllama.fsbot.guthix.*;
-import dev.salmonllama.fsbot.utilities.DiscordUtilities;
 import org.apache.logging.log4j.util.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +38,6 @@ public class OsrsShieldCommand extends Command {
                 OsrsSearchUtilities.sendResult(bestMatch, ctx.getChannel());
             } catch (Exception e) {
                 logger.error(e.getMessage());
-                DiscordUtilities.handleException(e, ctx);
             }
         } else {
             // Item search
@@ -52,7 +46,6 @@ public class OsrsShieldCommand extends Command {
                 OsrsSearchUtilities.sendResult(bestMatch, ctx.getChannel());
             } catch (Exception e) {
                 logger.error(e.getMessage());
-                DiscordUtilities.handleException(e, ctx);
             }
         }
     }

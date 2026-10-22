@@ -1,18 +1,15 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 // Heavily inspired by Kaaz's Emily database connection: https://github.com/Kaaz/DiscordBot/tree/master/src/main/java/emily/db
 package dev.salmonllama.fsbot.database;
 
 import dev.salmonllama.fsbot.exceptions.UnknownParameterException;
-import dev.salmonllama.fsbot.config.BotConfig;
 import dev.salmonllama.fsbot.utilities.Constants;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sqlite.javax.SQLiteConnectionPoolDataSource;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.*;
 
@@ -25,7 +22,12 @@ public class DatabaseProvider {
 
     public DatabaseProvider(String dbName) {
         DB_NAME = dbName;
-        Path addr = Path.of(Constants.BOT_FOLDER.toString(), BotConfig.DB_ADDR);
+        try {
+            Files.createDirectories(Constants.BOT_FOLDER);
+        } catch (IOException e) {
+            logger.error("Could not create bot config directory: {}", Constants.BOT_FOLDER, e);
+        }
+        Path addr = Constants.BOT_FOLDER.resolve(Constants.DB_NAME + ".db");
         DB_ADDR = "jdbc:sqlite:".concat(addr.toString());
 
         logger.info("Initializing database...");
@@ -40,11 +42,9 @@ public class DatabaseProvider {
             c = dataSource.getConnection();
             return c;
         } catch (SQLException e) {
-            e.printStackTrace();
-            System.out.println("Could not connect to database, double check config values");
-            System.exit(1);
+            logger.error("Could not connect to database at {}: {}", DB_ADDR, e.getMessage());
+            throw new RuntimeException("Could not connect to database: " + DB_ADDR, e);
         }
-        return null;
     }
 
     public Connection getConnection() {
