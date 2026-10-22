@@ -21,16 +21,16 @@ Welcome to the **FashionScape Bot** repository. This document serves as a compre
 
 | Component | Technology | Details / Notes |
 |---|---|---|
-| **Language & Runtime** | Java 16 / Java 21 | `sourceCompatibility = 16` in `build.gradle`; local VM may use OpenJDK 21. |
-| **Build System** | Gradle (Wrapper 7.2) | Note Gradle 7.2 / Java 21 compatibility considerations (see Section 6). |
-| **Discord Library** | Javacord (`3.8.0`) | Gateway intents include `Intent.MESSAGE_CONTENT`. Branch `3-jda-refactor` exists for JDA migration. |
-| **Application Framework** | Spring Boot (`2.5.4`) | Runs web starter & actuator on port 8080 (health checks / planned API). |
-| **Database** | SQLite via JDBC (`3.41.2.2`) | Connection pooling via `SQLiteConnectionPoolDataSource`. PostgreSQL driver also present. |
-| **HTTP Clients** | OkHttp 4 (`4.9.1`) & Java 11 `HttpClient` | OkHttp for Imgur; Java 11 `HttpClient` for ScapeFashion API. |
-| **Configuration** | Kaaz `ConfigurationBuilder` (`0.4`) | Parses `~/.fsbot/bot.config`. |
-| **JSON Parsing** | Gson (`2.8.8`) & `org.json` | Gson for ScapeFashion responses; `org.json` for Imgur. |
-| **Logging** | SLF4J with Logback (`1.2.5`) | Structured console logging configured in `src/main/resources/logback.xml`. |
-| **Containerization** | Docker | Multi-stage build (`gradle:7.2.0-jdk16` -> `openjdk:16`). |
+| **Language & Runtime** | Java 21 LTS | Configured via `java.toolchain.languageVersion = 21` in `build.gradle`. Uses Java 21 Virtual Threads. |
+| **Build System** | Gradle (Wrapper 8.10+) | Gradle wrapper updated for full Java 21 compatibility. |
+| **Discord Library** | JDA (`5.1.0`) | Discord API v10 with native slash commands, button interactions, and virtual thread event loop. Javacord retained temporarily for transition. |
+| **Application Framework** | Spring Boot (`3.3.4`) | Dependency injection, `@ConfigurationProperties`, Actuator health/metrics, and Spring Data JPA. |
+| **Database** | PostgreSQL 16+ & SQLite | PostgreSQL managed via Flyway migrations (`V1__init_schema.sql`) and Spring Data JPA; SQLite retained for legacy migration CLI. |
+| **Media Storage** | MinIO S3 (`io.minio:minio:8.5.12`) | Self-hosted S3 object storage for gallery outfit images with public CDN URL resolution; automated Imgur-to-MinIO migration CLI. |
+| **Configuration** | `application.yml` + `@ConfigurationProperties` | Centralized type-safe configuration in `BotProperties` (`fsbot.discord.*`, `fsbot.minio.*`). |
+| **JSON & HTTP Clients** | Java 21 `HttpClient`, OkHttp 4, Gson 2.11 | Java 21 native client for MinIO ingestion and external APIs; OkHttp/Gson in legacy utilities. |
+| **Logging** | SLF4J with Logback | Structured console logging configured in `src/main/resources/logback.xml`. |
+| **Containerization** | Docker & Docker Compose | Multi-stage build (`gradle:jdk21` -> `eclipse-temurin:21-jre`); turnkey `docker-compose.yml` with Postgres and MinIO. |
 
 ---
 
@@ -38,93 +38,107 @@ Welcome to the **FashionScape Bot** repository. This document serves as a compre
 
 ```
 .
-├── Dockerfile                   # Multi-stage production container build
-├── Makefile                     # Helper targets for Docker builds and running
+├── Dockerfile                   # Multi-stage production container build (Temurin 21)
+├── docker-compose.yml           # Local dev orchestrating Bot, Postgres 16, and MinIO
+├── example.env                  # Environment template for all bot credentials & storage
 ├── build.gradle                 # Gradle dependencies and build plugins
 ├── settings.gradle              # Gradle project settings
-├── privacy.md                   # Bot privacy policy for Discord compliance
-└── src
-    └── main
-        ├── java/dev/salmonllama/fsbot
-        │   ├── Main.java               # Application bootstrap (Config, DB, Guthix, Listeners, Spring)
-        │   ├── commands/               # Command implementations categorized by domain
-        │   │   ├── developer/          # Bot owner/dev commands (Test, Invite, Permission, etc.)
-        │   │   ├── general/            # User commands (Help, Ping, Stats, Outfit, Color, etc.)
-        │   │   ├── osrssearch/         # OSRS item slot and color search commands
-        │   │   ├── rs3search/          # RS3 item slot and color search commands
-        │   │   └── staff/              # Moderation commands (Retag, Blacklist, OutfitInfo, etc.)
-        │   ├── config/                 # BotConfig and Google SecretManager integration
-        │   ├── database/               # Database access layer
-        │   │   ├── controllers/        # Async controllers (Outfit, Gallery, Blacklist, Config, etc.)
-        │   │   ├── models/             # Schema definitions and data entities
-        │   │   ├── DatabaseModel.java  # Abstract base model
-        │   │   ├── DatabaseProvider.java # JDBC connection pool and query executor
-        │   │   └── FSDB.java           # Central database initialization and registry
-        │   ├── endpoints/              # Third-party API clients
-        │   │   ├── imgur/              # Imgur upload and deletion API client
-        │   │   └── scapefashion/       # ScapeFashion item/color HTTP endpoints
-        │   ├── exceptions/             # Custom exception types
-        │   ├── guthix/                 # Custom command framework and dispatcher ("Guthix")
-        │   ├── listeners/              # Discord gateway event listeners
-        │   ├── services/               # Helper services (IdService, MemberRoleService)
-        │   └── utilities/              # Constants, assertions, warnings, and Discord utilities
-        └── resources
-            └── logback.xml             # Logback console pattern & logger configuration
+├── docs/
+│   └── v3_architecture_plan.md  # Comprehensive v3 modernization plan and roadmap
+├── src
+│   ├── main
+│   │   ├── java/dev/salmonllama/fsbot
+│   │   │   ├── Main.java               # Spring Boot Application bootstrap entrypoint
+│   │   │   ├── DiscordBotRunner.java   # Spring CommandLineRunner initializing JDA 5 & Virtual Threads
+│   │   │   ├── config/                 # BotProperties record (@ConfigurationProperties(prefix = "fsbot"))
+│   │   │   ├── discord/                # JDA 5 Modern Discord Integration
+│   │   │   │   ├── commands/           # SlashCommand interface & SlashCommandDispatcher
+│   │   │   │   │   └── general/        # Modern slash commands (PingSlashCommand, etc.)
+│   │   │   │   ├── components/         # ButtonHandler and interactive UI component routing
+│   │   │   │   └── listeners/          # GalleryEventListener with interactive voting & deletion buttons
+│   │   │   ├── storage/                # MinIO Object Storage
+│   │   │   │   ├── MinioConfiguration.java # MinioClient Spring bean configuration
+│   │   │   │   ├── MinioStorageService.java# Asset upload, stream, and CDN public URL resolution
+│   │   │   │   └── migration/          # ImgurToMinioRehostCli & ImgurToMinioRehostService
+│   │   │   ├── database/               # Database access layer
+│   │   │   │   ├── entities/           # JPA entities (OutfitEntity, GalleryChannelEntity, etc.)
+│   │   │   │   ├── repositories/       # Spring Data JPA repositories
+│   │   │   │   ├── migration/          # SqliteToPostgresMigrationCli & MigrationService
+│   │   │   │   ├── controllers/        # Legacy SQLite controllers (in progress of full port)
+│   │   │   │   └── models/             # Legacy SQLite schema models
+│   │   │   ├── services/               # Core services (BlocklistService, IdService)
+│   │   │   ├── commands/               # Legacy text-prefix commands (being ported to slash commands)
+│   │   │   ├── guthix/                 # Legacy command dispatcher ("Guthix")
+│   │   │   └── endpoints/              # ScapeFashion and Imgur clients
+│   │   └── resources
+│   │       ├── application.yml         # Spring Boot & Bot configuration properties
+│   │       ├── db/migration/           # Flyway PostgreSQL migrations (V1__init_schema.sql)
+│   │       └── logback.xml             # Logback console pattern & logger configuration
+│   └── test/java/dev/salmonllama/fsbot # Comprehensive JUnit 5 & Spring Boot test suite
 ```
 
 ---
 
 ## 4. Key Subsystems & Design Patterns
 
-### 4.1 Guthix (Command Framework)
-The custom command dispatcher is named **Guthix** (`dev.salmonllama.fsbot.guthix`):
-- **`Guthix`**: Implements `MessageCreateListener`. Validates non-bot authors, checks if the author is blacklisted (`UserBlacklistController`), verifies the configured command prefix, resolves the command via `Registry`, evaluates permissions via `PermissionManager`, and executes `Command.invoke(CommandContext)`.
-- **`Command`**: Abstract base class. Each command defines its `name`, `description`, `usage`, `category`, `permission`, `aliases`, and `onCommand(CommandContext)`.
-- **`PermissionManager`**: Validates user access based on `PermissionType` (`NONE`, `OWNER`, `ROLE`, `STATIC`, `PERMISSION`). `STATIC` permissions are stored in the database.
+### 4.1 Modern Discord Interaction & Command Engine (JDA 5)
+The primary Discord interface has migrated from legacy Javacord text parsing to **JDA 5.1.0**:
+- **`DiscordBotRunner`:** Implements `CommandLineRunner`. Initializes JDA 5 with Java 21 Virtual Thread pools (`Executors.newVirtualThreadPerTaskExecutor()`) for callback, event, and elastic rate-limit execution, alongside a scheduled virtual thread executor for gateway heartbeat and rate-limit scheduling. Automatically bypasses gateway connection during test executions or when tokens are omitted. Cleanly terminates JDA and thread pools via `@PreDestroy`.
+- **`SlashCommand` & `SlashCommandDispatcher`:**
+  - `SlashCommand` defines `getName()`, `getDescription()`, `buildCommandData()`, and `execute(SlashCommandInteractionEvent)`.
+  - `SlashCommandDispatcher` (extends `ListenerAdapter`) injects all Spring beans implementing `SlashCommand` and registers them with Discord on `ReadyEvent`. Supports instant guild command deployment using `fsbot.discord.dev-guild-id`.
+  - Intercepts incoming slash interactions, evaluates blocklist status via `BlocklistService`, routes to the corresponding command bean, and provides centralized exception handling.
+- **`ButtonHandler`:** Modular interface for UI button components. Dispatched by `SlashCommandDispatcher` based on component ID prefixes.
+- **Legacy Guthix (`dev.salmonllama.fsbot.guthix`):** Legacy text-prefix parser (`~command`) maintained temporarily while individual commands are ported to slash commands.
 
-### 4.2 Gallery & Outfit Lifecycle
-1. **Submission (`ImageListener`):**
-   - Listens for messages with image attachments in configured gallery channels (`GalleryController`).
-   - If `ENVIRONMENT` env var is set (Production): Uploads image to Imgur using `ImgurAPIConnection`, captures Imgur link and `deleteHash`, then saves an `Outfit` record in SQLite.
-   - If in Development: Directly saves the Discord image URL to SQLite without calling Imgur.
-2. **Reactions (`ThumbsListener`):**
-   - Adds default reaction emojis (e.g. `:heartpulse:`) or thumbs up/down to allow server members to vote.
-3. **Retrieval (`OutfitCommand`):**
-   - Users run `~outfit` (or search by tag/author) to view randomly selected community outfits formatted in Discord embeds.
-4. **Moderation (`ForceDeleteCommand`, `RemoveOutfitCommand`, `RestoreOutfitCommand`):**
-   - Outfits are soft-deleted by updating the `deleted` flag.
+### 4.2 Gallery & Outfit Lifecycle (v3 Modernized)
+1. **Submission (`GalleryEventListener`):**
+   - Listens for messages with image attachments in channels registered in `GalleryChannelRepository`.
+   - Filters out bot authors, webhooks, non-guild messages, and blocked users/servers.
+   - Streams image attachments directly into MinIO S3 via `MinioStorageService.uploadOutfitFromUrl()`.
+   - Persists an `OutfitEntity` into PostgreSQL via `OutfitRepository`.
+2. **Interactive Showcase & Voting Buttons:**
+   - Automatically posts an outfit showcase embed into the gallery channel with interactive action row buttons:
+     - `Button.primary("gallery:upvote:<id>", "❤️ Upvote (0)")`: dynamically increments `displayCount` in PostgreSQL and updates the button label in place.
+     - `Button.danger("gallery:delete:<id>", "🗑️ Delete")`: validates that the interacting user is the submitter or holds staff moderation permissions (`ADMINISTRATOR`, `MANAGE_SERVER`, `MESSAGE_MANAGE`), then soft-deletes the entity (`deleted = true`) and updates the showcase embed.
 
-### 4.3 Database Architecture
-- **Schema Management:** Each model in `dev.salmonllama.fsbot.database.models` defines a static `schema()` method returning raw SQL `CREATE TABLE IF NOT EXISTS` statements. Tables are initialized on startup in `FSDB.prepareTables()`.
-- **Controllers:** Controllers in `database.controllers` provide asynchronous facades using `CompletableFuture.supplyAsync()` wrapping JDBC calls in `DatabaseProvider`.
+### 4.3 Database Architecture (PostgreSQL & Flyway)
+- **Schema Management:** PostgreSQL schema managed via versioned Flyway migrations located in `src/main/resources/db/migration` (`V1__init_schema.sql`).
+- **Data Access:** Spring Data JPA repositories with HikariCP connection pooling.
+- **Legacy Migration:** `SqliteToPostgresMigrationService` and `SqliteToPostgresMigrationCli` provide safe migration of legacy `fsbot.db` records into PostgreSQL.
+
+### 4.4 Object Storage Architecture (MinIO S3)
+- **`MinioStorageService`:** Configured via `MinioClient` bean in `MinioConfiguration`. Handles bucket initialization, image stream upload, extension resolution, existence checks, and public CDN URL formatting (`https://media.fashionscape.org/outfits/{id}.png`).
+- **`ImgurToMinioRehostCli` / `ImgurToMinioRehostService`:** Standalone CLI tool to scan existing outfit records pointing to Imgur, download images, re-upload them to MinIO, and update PostgreSQL URLs.
+
+### 4.5 Security & Blocklist Subsystem
+- **`BlocklistService`:** Centralized service that verifies whether users or guilds are prohibited from bot commands and gallery submissions using `BlockedUserRepository` and `BlockedServerRepository`.
 
 ---
 
 ## 5. Environment & Configuration
 
-### Configuration File (`~/.fsbot/bot.config`)
-The application looks for configuration in `$HOME/.fsbot/bot.config` (`Constants.BOT_FOLDER`):
-```properties
-DB_ADDR=fsbot.db
-DB_NAME=fsbot
-DEFAULT_PREFIX=~
-BOT_OWNER=<discord_owner_id>
-STAFF_ROLE=<staff_role_id>
-REPORT_CHANNEL=<report_channel_id>
-ACHIEVEMENT_CHANNEL=<achievement_channel_id>
-WELCOME_CHANNEL=<welcome_channel_id>
-OUTFIT_LOG=<outfit_log_channel_id>
-BOT_TOKEN_DEV=<dev_token>
-BOT_TOKEN_PROD=<prod_token>
-IMGUR_CLIENT=<imgur_client_id>
-IMGUR_BEARER=<imgur_bearer_token>
-```
-> [!IMPORTANT]
-> If `bot.config` is missing or fails to parse, `BotConfig.initConfig` will print a stack trace and terminate with `System.exit(1)`. Always ensure `~/.fsbot/bot.config` is initialized before running the application.
+Configuration uses standard 12-factor principles via Spring Boot `application.yml` and `@ConfigurationProperties` binding into the `BotProperties` record.
 
-### Environment Variables
-- `ENVIRONMENT`: If non-null (e.g. `ENVIRONMENT=PROD`), activates production tokens (`BOT_TOKEN_PROD`) and enables Imgur API uploads. If unset, development mode is used.
-- `GOOGLE_APPLICATION_CREDENTIALS`: Path to Google Cloud credentials service account JSON if utilizing GCP Secret Manager.
+### Key Environment Variables (`example.env`)
+```bash
+# Discord Gateway
+FSBOT_DISCORD_TOKEN=<bot_token>
+FSBOT_OWNER_ID=<discord_owner_id>
+FSBOT_DEV_GUILD_ID=<optional_dev_guild_for_instant_slash_command_sync>
+
+# PostgreSQL
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/fashionscape
+SPRING_DATASOURCE_USERNAME=fsbot
+SPRING_DATASOURCE_PASSWORD=fsbot
+
+# MinIO Object Storage
+MINIO_ENDPOINT=http://localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_BUCKET=fashionscape-outfits
+MINIO_PUBLIC_URL=https://media.fashionscape.org
+```
 
 ---
 
@@ -137,39 +151,42 @@ When working in an Android Laptop / Linux VM environment:
   PROJECT_CACHE_DIR="$HOME/.cache/projects/$(basename "$PWD")-$(pwd -P | sha1sum | cut -c1-8)"
   ./gradlew <task> --project-cache-dir="$PROJECT_CACHE_DIR/gradle"
   ```
-- **Java Version Compatibility:**
-  The project is configured for Java 16 with Gradle 7.2. Modern systems running JDK 21+ may encounter compatibility issues with Gradle 7.2. When modernizing:
-  - Upgrade Gradle wrapper to `8.5+` or use a compatible JDK 16/17 runtime.
+- **Java 21 LTS Runtime:** Ensure JDK 21 is active. Gradle tasks run via Gradle wrapper 8.10+.
 
-### Running with Docker
-The repository includes a multi-stage `Dockerfile`:
+### Running with Docker Compose
+The repository includes a turnkey `docker-compose.yml` orchestrating the bot with PostgreSQL and MinIO:
 ```bash
-docker build -t fashionscape-bot .
-docker run -p 8080:8080 -e ENVIRONMENT=PROD -v ~/.fsbot:/root/.fsbot fashionscape-bot
+docker compose up -d
 ```
 
 ---
 
-## 7. Known Technical Debt & Modernization Roadmap
+## 7. Modernization Roadmap Status (v3)
 
-When working on features or refactors, consider the following areas of technical debt:
+The project is executing the v3 modernization plan documented in `docs/v3_architecture_plan.md`:
 
-1. **Discord Slash Commands & JDA Migration:**
-   - The bot currently relies solely on legacy prefix commands (`~command`) and message content parsing via Javacord `3.8.0`.
-   - Branch `origin/3-jda-refactor` contains early work to migrate to Java Discord API (JDA).
-   - Moving to Discord Application Commands (Slash Commands) is strongly advised for Discord API compliance and user experience.
-
-2. **Async & Concurrency in Database Calls:**
-   - Several controllers wrap blocking JDBC calls in `CompletableFuture`, but callers frequently invoke `.join()` synchronously on gateway listener threads (e.g., `UserBlacklistController.exists().join()` in `Guthix.onMessageCreate` and `StaticPermissionController.getByUser().join()`).
-   - SQLite uses file-level locking. Under heavy concurrent message traffic, multiple threads writing simultaneously can encounter locking issues.
-
-3. **Spring Boot Utilization:**
-   - Spring Boot (`2.5.4`) is started in `Main.java` alongside Javacord, but dependency injection (`@Service`, `@Repository`, `@Autowired`) is not used. The bot components are mostly instantiated statically or manually.
-   - Either refactor the bot components into idiomatic Spring beans or streamline the build by removing unused Spring dependencies if only a lightweight HTTP server is needed.
-
-4. **Testing Suite:**
-   - Currently, there are no automated tests under `src/test`.
-   - Priority should be given to creating unit tests for command parsing (`RegistryCommand`), permission evaluation, and ScapeFashion API response mapping.
-
-5. **Secret Management:**
-   - `SecretManager.java` (Google Cloud Secret Manager) is currently sidelined in favor of `bot.config`. Unify secret loading to support standard environment variables, `.env`, or GCP secrets cleanly.
+- [x] **Phase 1: Build & Base Infrastructure (`feature/v3-phase1-build`):**
+  - Upgraded to Gradle 8.10+, Spring Boot 3.3.4, Java 21 LTS toolchain.
+  - Added Docker multi-stage build (Temurin 21) and `docker-compose.yml`.
+  - Replaced `bot.config` with `application.yml` and `BotProperties`.
+- [x] **Phase 2: Database & SQLite Migration (`feature/v3-phase2-database`):**
+  - Implemented PostgreSQL schema via Flyway (`V1__init_schema.sql`).
+  - Added JPA entities and Spring Data repositories.
+  - Implemented `SqliteToPostgresMigrationService` and CLI runner.
+- [x] **Phase 3: Media Storage Migration (`feature/v3-phase3-minio`):**
+  - Integrated MinIO Java SDK via `MinioStorageService`.
+  - Added direct image stream ingestion from Discord CDN.
+  - Implemented `ImgurToMinioRehostCli` and migration service.
+- [x] **Phase 4: Discord Interaction & Gateway Refactor (`feature/v3-phase4-jda-interactions`):**
+  - Integrated JDA 5.1.0 with Java 21 Virtual Threads.
+  - Created `SlashCommand` interface and `SlashCommandDispatcher`.
+  - Implemented `GalleryEventListener` with interactive voting and delete buttons.
+  - Replaced Javacord initialization in `DiscordBotRunner`.
+- [ ] **Phase 5: Feature Ports & ScapeFashion Integration (`feature/v3-phase5-commands`):**
+  - Port outfit showcase and search commands (`/outfit random`, `/outfit search`, `/outfit info`, `/outfit delete`).
+  - Modernize `ScapeFashionClient` using Java 21 `HttpClient` and Jackson/Gson.
+  - Port OSRS & RS3 color search commands.
+  - Port staff moderation and blocklist commands (`/block user`, `/block server`).
+- [ ] **Phase 6: Integration Tests & Final Release (`feature/v3-phase6-testing`):**
+  - Testcontainers for PostgreSQL and MinIO end-to-end integration tests.
+  - Final PR of `v3-modernization` into `main`.

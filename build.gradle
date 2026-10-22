@@ -38,6 +38,11 @@ dependencies {
     // Object Storage
     implementation 'io.minio:minio:8.5.12'
 
+    // Discord Library (JDA 5)
+    implementation ('net.dv8tion:JDA:5.1.0') {
+        exclude module: 'opus-java'
+    }
+
     // Legacy transition dependencies
     implementation 'com.github.Kaaz:ConfigurationBuilder:0.4'
     implementation 'org.javacord:javacord:3.8.0'
