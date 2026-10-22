@@ -39,6 +39,9 @@ dependencies {
     implementation 'org.flywaydb:flyway-database-postgresql'
     implementation 'org.xerial:sqlite-jdbc:3.46.1.0'
 
+    // Object Storage
+    implementation 'io.minio:minio:8.5.12'
+
     // Legacy transition dependencies
     implementation 'com.github.Kaaz:ConfigurationBuilder:0.4'
     implementation 'org.javacord:javacord:3.8.0'
