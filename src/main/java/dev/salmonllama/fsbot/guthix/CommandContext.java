@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.guthix;
 
 import org.javacord.api.DiscordApi;

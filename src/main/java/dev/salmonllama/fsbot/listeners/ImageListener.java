@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.listeners;
 
 import dev.salmonllama.fsbot.database.controllers.GalleryController;

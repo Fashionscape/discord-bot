@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.endpoints.imgur;
 
 //import dev.salmonllama.fsbot.config.SecretManager;

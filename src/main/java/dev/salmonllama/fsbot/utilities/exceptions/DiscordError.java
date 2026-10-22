@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.utilities.exceptions;
 
 import org.javacord.api.entity.message.embed.EmbedBuilder;

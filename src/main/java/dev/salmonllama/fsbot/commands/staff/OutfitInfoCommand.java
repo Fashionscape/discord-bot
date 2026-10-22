@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.commands.staff;
 
 import dev.salmonllama.fsbot.database.controllers.OutfitController;

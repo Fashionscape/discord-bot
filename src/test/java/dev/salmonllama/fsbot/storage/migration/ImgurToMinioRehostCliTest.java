@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.storage.migration;
 
 import org.junit.jupiter.api.BeforeEach;

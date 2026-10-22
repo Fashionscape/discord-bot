@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.database.repositories;
 
 import dev.salmonllama.fsbot.database.entities.ColorRoleEntity;

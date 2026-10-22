@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 2021 Aleksei Gryczewski
- */
-
 package dev.salmonllama.fsbot.commands.rs3search;
 
 import dev.salmonllama.fsbot.endpoints.scapefashion.ScapeFashionConnection;
