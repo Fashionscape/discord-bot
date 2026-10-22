@@ -182,7 +182,7 @@ The project is executing the v3 modernization plan documented in `docs/v3_archit
   - Created `SlashCommand` interface and `SlashCommandDispatcher`.
   - Implemented `GalleryEventListener` with interactive voting and delete buttons.
   - Replaced Javacord initialization in `DiscordBotRunner`.
-- [ ] **Phase 5: Feature Ports & ScapeFashion Integration (`feature/v3-phase5-commands`):**
+- [x] **Phase 5: Feature Ports & ScapeFashion Integration (`feature/v3-phase5-commands`):**
   - Port outfit showcase and search commands (`/outfit random`, `/outfit search`, `/outfit info`, `/outfit delete`).
   - Modernize `ScapeFashionClient` using Java 21 `HttpClient` and Jackson/Gson.
   - Port OSRS & RS3 color search commands.

@@ -29,6 +29,8 @@ public interface OutfitRepository extends JpaRepository<OutfitEntity, String>, J
 
     Page<OutfitEntity> findBySubmitterAndDeletedFalse(String submitter, Pageable pageable);
 
+    Page<OutfitEntity> findByTagIgnoreCaseAndSubmitterAndDeletedFalse(String tag, String submitter, Pageable pageable);
+
     long countByDeletedFalse();
 
     long countByTagIgnoreCaseAndDeletedFalse(String tag);
@@ -43,6 +45,12 @@ public interface OutfitRepository extends JpaRepository<OutfitEntity, String>, J
 
     @Query(value = "SELECT * FROM outfits WHERE deleted = false AND submitter = :submitter ORDER BY RANDOM() LIMIT 1", nativeQuery = true)
     Optional<OutfitEntity> findRandomOutfitBySubmitter(@Param("submitter") String submitter);
+
+    @Query(value = "SELECT * FROM outfits WHERE deleted = false AND LOWER(tag) = LOWER(:tag) AND submitter = :submitter ORDER BY RANDOM() LIMIT 1", nativeQuery = true)
+    Optional<OutfitEntity> findRandomOutfitByTagAndSubmitter(@Param("tag") String tag, @Param("submitter") String submitter);
+
+    @Query("SELECT DISTINCT o.tag FROM OutfitEntity o WHERE o.deleted = false AND o.tag IS NOT NULL ORDER BY o.tag ASC")
+    List<String> findDistinctTags();
 
     List<OutfitEntity> findByLinkContaining(String term);
 }
