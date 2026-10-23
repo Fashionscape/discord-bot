@@ -45,8 +45,14 @@ public class OutfitEntity {
     @Column(name = "featured", nullable = false)
     private boolean featured = false;
 
-    @Column(name = "display_count", nullable = false)
+    // Times shown by /outfit random. Changed only by OutfitRepository.incrementDisplayCount,
+    // so entity saves never overwrite a concurrent increment.
+    @Column(name = "display_count", nullable = false, updatable = false)
     private int displayCount = 0;
+
+    // Changed only by the vote queries in OutfitRepository, alongside outfit_votes.
+    @Column(name = "vote_count", nullable = false, insertable = false, updatable = false)
+    private int voteCount = 0;
 
     @Column(name = "delete_hash", length = 255)
     private String deleteHash;
@@ -183,6 +189,10 @@ public class OutfitEntity {
 
     public void setDisplayCount(int displayCount) {
         this.displayCount = displayCount;
+    }
+
+    public int getVoteCount() {
+        return voteCount;
     }
 
     public String getDeleteHash() {

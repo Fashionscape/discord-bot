@@ -8,6 +8,7 @@ import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
 import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
 import dev.salmonllama.fsbot.services.BlocklistService;
 import dev.salmonllama.fsbot.services.AuditService;
+import dev.salmonllama.fsbot.services.OutfitService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import dev.salmonllama.fsbot.storage.MinioStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
@@ -47,6 +48,9 @@ class GalleryEventListenerTest {
 
     @Mock
     private OutfitRepository outfitRepository;
+
+    @Mock
+    private OutfitService outfitService;
 
     @Mock
     private MinioStorageService minioStorageService;
@@ -104,6 +108,7 @@ class GalleryEventListenerTest {
         listener = new GalleryEventListener(
                 galleryChannelRepository,
                 outfitRepository,
+                outfitService,
                 minioStorageService,
                 blocklistService,
                 new PermissionService(staticPermissionRepository, properties),
@@ -233,15 +238,16 @@ class GalleryEventListenerTest {
     @SuppressWarnings("unchecked")
     void testHandleUpvote() {
         when(buttonEvent.getComponentId()).thenReturn("gallery:upvote:outfit-99");
+        when(buttonEvent.getUser()).thenReturn(author);
+        when(author.getId()).thenReturn("voter-1");
         when(buttonEvent.getHook()).thenReturn(interactionHook);
-
-        OutfitEntity outfit = new OutfitEntity(
-                "outfit-99", "https://media.fashionscape.org/1.png", "user-1", "tag", null,
-                "Player", Instant.now(), Instant.now(), false, false, 3, null,
-                "server-1",
-                "channel-1"
-        );
-        when(outfitRepository.findByIdAndDeletedFalse("outfit-99")).thenReturn(Optional.of(outfit));
+        when(buttonEvent.getMessage()).thenReturn(message);
+        when(message.getButtons()).thenReturn(List.of(
+                net.dv8tion.jda.api.interactions.components.buttons.Button.primary("gallery:upvote:outfit-99", "Upvote (3)"),
+                net.dv8tion.jda.api.interactions.components.buttons.Button.danger("gallery:delete:outfit-99", "Delete")
+        ));
+        when(outfitService.toggleVote("outfit-99", "voter-1"))
+                .thenReturn(Optional.of(new OutfitService.VoteResult(true, 4)));
         when(buttonEvent.editComponents(any(net.dv8tion.jda.api.interactions.components.ActionRow.class)))
                 .thenReturn(messageEditCallbackAction);
 
@@ -257,9 +263,67 @@ class GalleryEventListenerTest {
 
         listener.handle(buttonEvent);
 
-        assertEquals(4, outfit.getDisplayCount());
-        verify(outfitRepository).save(outfit);
+        ArgumentCaptor<net.dv8tion.jda.api.interactions.components.ActionRow> rowCaptor =
+                ArgumentCaptor.forClass(net.dv8tion.jda.api.interactions.components.ActionRow.class);
+        verify(buttonEvent).editComponents(rowCaptor.capture());
+        List<net.dv8tion.jda.api.interactions.components.buttons.Button> buttons = rowCaptor.getValue().getButtons();
+        assertEquals(2, buttons.size());
+        assertEquals("Upvote (4)", buttons.get(0).getLabel());
+        assertEquals("Delete", buttons.get(1).getLabel());
+        verify(interactionHook).sendMessage(contains("Vote added"));
         verify(webhookAction).queue();
+        verify(outfitRepository, never()).save(any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testHandleUpvoteToggleOff() {
+        when(buttonEvent.getComponentId()).thenReturn("gallery:upvote:outfit-99");
+        when(buttonEvent.getUser()).thenReturn(author);
+        when(author.getId()).thenReturn("voter-1");
+        when(buttonEvent.getHook()).thenReturn(interactionHook);
+        when(buttonEvent.getMessage()).thenReturn(message);
+        when(message.getButtons()).thenReturn(List.of(
+                net.dv8tion.jda.api.interactions.components.buttons.Button.primary("gallery:upvote:outfit-99", "Upvote (4)")
+        ));
+        when(outfitService.toggleVote("outfit-99", "voter-1"))
+                .thenReturn(Optional.of(new OutfitService.VoteResult(false, 3)));
+        when(buttonEvent.editComponents(any(net.dv8tion.jda.api.interactions.components.ActionRow.class)))
+                .thenReturn(messageEditCallbackAction);
+
+        doAnswer(invocation -> {
+            Consumer<Void> consumer = invocation.getArgument(0);
+            consumer.accept(null);
+            return null;
+        }).when(messageEditCallbackAction).queue(any(Consumer.class));
+
+        WebhookMessageCreateAction webhookAction = mock(WebhookMessageCreateAction.class);
+        when(interactionHook.sendMessage(anyString())).thenReturn(webhookAction);
+        when(webhookAction.setEphemeral(true)).thenReturn(webhookAction);
+
+        listener.handle(buttonEvent);
+
+        ArgumentCaptor<net.dv8tion.jda.api.interactions.components.ActionRow> rowCaptor =
+                ArgumentCaptor.forClass(net.dv8tion.jda.api.interactions.components.ActionRow.class);
+        verify(buttonEvent).editComponents(rowCaptor.capture());
+        assertEquals(1, rowCaptor.getValue().getButtons().size());
+        assertEquals("Upvote (3)", rowCaptor.getValue().getButtons().get(0).getLabel());
+        verify(interactionHook).sendMessage(contains("Vote removed"));
+    }
+
+    @Test
+    void testHandleUpvoteOnDeletedOutfit() {
+        when(buttonEvent.getComponentId()).thenReturn("gallery:upvote:outfit-gone");
+        when(buttonEvent.getUser()).thenReturn(author);
+        when(author.getId()).thenReturn("voter-1");
+        when(outfitService.toggleVote("outfit-gone", "voter-1")).thenReturn(Optional.empty());
+        when(buttonEvent.reply(anyString())).thenReturn(replyCallbackAction);
+        when(replyCallbackAction.setEphemeral(true)).thenReturn(replyCallbackAction);
+
+        listener.handle(buttonEvent);
+
+        verify(buttonEvent).reply(contains("could not be found"));
+        verify(buttonEvent, never()).editComponents(any(net.dv8tion.jda.api.interactions.components.ActionRow.class));
     }
 
     @Test

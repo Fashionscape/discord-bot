@@ -5,6 +5,7 @@ import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.GalleryChannelRepository;
 import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
 import dev.salmonllama.fsbot.services.BlocklistService;
+import dev.salmonllama.fsbot.services.OutfitService;
 import dev.salmonllama.fsbot.storage.MinioStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,6 +76,9 @@ class OutfitPipelineIntegrationTest {
     @Autowired
     private BlocklistService blocklistService;
 
+    @Autowired
+    private OutfitService outfitService;
+
     @BeforeEach
     void setUp() throws Exception {
         minioStorageService.ensureBucketExists();
@@ -143,13 +147,11 @@ class OutfitPipelineIntegrationTest {
         byte[] readBackBytes = minioStorageService.getObjectBytes(objectKey.get());
         assertArrayEquals(imageBytes, readBackBytes);
 
-        // 5. Simulate upvoting: increment count in PostgreSQL
-        entity.setDisplayCount(entity.getDisplayCount() + 1);
-        entity.setUpdated(Instant.now());
-        outfitRepository.save(entity);
+        // 5. Upvote: one vote per user, counted in PostgreSQL
+        assertEquals(Optional.of(new OutfitService.VoteResult(true, 1)), outfitService.toggleVote(outfitId, "voter-1"));
 
         OutfitEntity upvoted = outfitRepository.findByIdAndDeletedFalse(outfitId).orElseThrow();
-        assertEquals(1, upvoted.getDisplayCount());
+        assertEquals(1, upvoted.getVoteCount());
 
         // 6. Test searching by tag and submitter
         List<OutfitEntity> tagMatches = outfitRepository.findByTagIgnoreCaseAndDeletedFalse("RETRO");

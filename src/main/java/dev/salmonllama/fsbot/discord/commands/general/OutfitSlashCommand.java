@@ -123,9 +123,10 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         }
 
         OutfitEntity outfit = outfitOpt.get();
+        outfitService.recordShown(outfit.getId());
         EmbedBuilder embed = buildOutfitEmbed(outfit);
 
-        Button upvoteBtn = Button.primary("gallery:upvote:" + outfit.getId(), "Upvote (" + outfit.getDisplayCount() + ")");
+        Button upvoteBtn = Button.primary("gallery:upvote:" + outfit.getId(), "Upvote (" + outfit.getVoteCount() + ")");
         event.replyEmbeds(embed.build())
                 .setActionRow(upvoteBtn)
                 .queue();
@@ -151,7 +152,8 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
                 .setColor(EMBED_COLOR)
                 .addField("Submitter", "<@" + outfit.getSubmitter() + "> (" + outfit.getDiscordName() + ")", true)
                 .addField("Tag", outfit.getTag() != null ? outfit.getTag() : "None", true)
-                .addField("Upvotes", String.valueOf(outfit.getDisplayCount()), true)
+                .addField("Upvotes", String.valueOf(outfit.getVoteCount()), true)
+                .addField("Times shown", String.valueOf(outfit.getDisplayCount()), true)
                 .addField("Status", outfit.isDeleted() ? "🗑️ Deleted" : "✅ Active", true)
                 .addField("Featured", outfit.isFeatured() ? "⭐ Yes" : "No", true)
                 .addField("Created", outfit.getCreated() != null ? outfit.getCreated().toString() : "Unknown", true)
@@ -317,7 +319,7 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
                     .append("` | Submitter: <@")
                     .append(outfit.getSubmitter())
                     .append("> | ❤️ ")
-                    .append(outfit.getDisplayCount())
+                    .append(outfit.getVoteCount())
                     .append("\n");
         }
 
