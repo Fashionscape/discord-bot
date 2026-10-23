@@ -5,6 +5,7 @@ import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.GalleryChannelRepository;
 import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
 import dev.salmonllama.fsbot.discord.components.ButtonHandler;
+import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.BlocklistService;
 import dev.salmonllama.fsbot.services.IdService;
 import dev.salmonllama.fsbot.services.PermissionService;
@@ -42,19 +43,22 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
     private final MinioStorageService minioStorageService;
     private final BlocklistService blocklistService;
     private final PermissionService permissionService;
+    private final AuditService auditService;
 
     public GalleryEventListener(
             GalleryChannelRepository galleryChannelRepository,
             OutfitRepository outfitRepository,
             MinioStorageService minioStorageService,
             BlocklistService blocklistService,
-            PermissionService permissionService
+            PermissionService permissionService,
+            AuditService auditService
     ) {
         this.galleryChannelRepository = galleryChannelRepository;
         this.outfitRepository = outfitRepository;
         this.minioStorageService = minioStorageService;
         this.blocklistService = blocklistService;
         this.permissionService = permissionService;
+        this.auditService = auditService;
     }
 
     @Override
@@ -127,6 +131,8 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
 
                 outfitRepository.save(outfit);
                 logger.info("Saved outfit {} submitted by {}", outfitId, userId);
+                auditService.record(event.getJDA(), AuditService.Action.OUTFIT_ADDED, userId, serverId,
+                        AuditService.TARGET_OUTFIT, outfitId, "Submitted in <#" + channelId + "> with tag `" + tag + "`");
 
                 EmbedBuilder embed = new EmbedBuilder()
                         .setTitle("New Outfit Submission!")
@@ -218,8 +224,9 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
         outfit.setDeleted(true);
         outfit.setUpdated(Instant.now());
         outfitRepository.save(outfit);
-        logger.info("Outfit action: deleted outfit {} (actor={}, guild={})", outfitId, userId,
-                event.getGuild() != null ? event.getGuild().getId() : null);
+        auditService.record(event.getJDA(), AuditService.Action.OUTFIT_DELETED, userId,
+                event.getGuild() != null ? event.getGuild().getId() : null, AuditService.TARGET_OUTFIT, outfitId,
+                userId.equals(outfit.getSubmitter()) ? "Deleted by its submitter" : "Deleted by staff (submitter <@" + outfit.getSubmitter() + ">)");
 
         EmbedBuilder deletedEmbed = new EmbedBuilder()
                 .setTitle("Outfit Removed")

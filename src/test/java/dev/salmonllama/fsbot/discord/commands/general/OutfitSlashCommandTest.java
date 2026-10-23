@@ -4,6 +4,7 @@ import dev.salmonllama.fsbot.config.BotProperties;
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
 import dev.salmonllama.fsbot.services.OutfitService;
+import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
@@ -46,6 +47,9 @@ class OutfitSlashCommandTest {
     private StaticPermissionRepository staticPermissionRepository;
 
     @Mock
+    private AuditService auditService;
+
+    @Mock
     private SlashCommandInteractionEvent slashEvent;
 
     @Mock
@@ -78,7 +82,7 @@ class OutfitSlashCommandTest {
                 new BotProperties.DiscordProperties("token", 123456789L, "dev-guild", ""),
                 new BotProperties.MinioProperties("http://localhost:9000", "access", "secret", "bucket", "https://media.fashionscape.org")
         );
-        command = new OutfitSlashCommand(outfitService, new PermissionService(staticPermissionRepository, properties));
+        command = new OutfitSlashCommand(outfitService, new PermissionService(staticPermissionRepository, properties), auditService);
 
         when(slashEvent.getUser()).thenReturn(mockUser);
         when(mockUser.getId()).thenReturn("1001");
@@ -147,6 +151,8 @@ class OutfitSlashCommandTest {
 
         verify(outfitService).delete("outfit-to-delete");
         verify(slashEvent).replyEmbeds(any(MessageEmbed.class));
+        verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_DELETED), eq("1001"), any(),
+                eq(AuditService.TARGET_OUTFIT), eq("outfit-to-delete"), eq("Deleted by its submitter"));
     }
 
     @Test
@@ -164,6 +170,7 @@ class OutfitSlashCommandTest {
 
         verify(outfitService, never()).delete("outfit-not-mine");
         verify(slashEvent).reply(contains("You do not have permission"));
+        verifyNoInteractions(auditService);
     }
 
     @Test
@@ -212,6 +219,8 @@ class OutfitSlashCommandTest {
 
         verify(outfitService).restore("outfit-del");
         verify(slashEvent).replyEmbeds(any(MessageEmbed.class));
+        verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_RESTORED), eq("123456789"), any(),
+                eq(AuditService.TARGET_OUTFIT), eq("outfit-del"), any());
     }
 
     @Test

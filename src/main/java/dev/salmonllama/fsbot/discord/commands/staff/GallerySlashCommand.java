@@ -3,6 +3,7 @@ package dev.salmonllama.fsbot.discord.commands.staff;
 import dev.salmonllama.fsbot.database.entities.GalleryChannelEntity;
 import dev.salmonllama.fsbot.database.repositories.GalleryChannelRepository;
 import dev.salmonllama.fsbot.discord.commands.SlashCommand;
+import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
@@ -33,10 +34,16 @@ public class GallerySlashCommand implements SlashCommand {
 
     private final GalleryChannelRepository galleryChannelRepository;
     private final PermissionService permissionService;
+    private final AuditService auditService;
 
-    public GallerySlashCommand(GalleryChannelRepository galleryChannelRepository, PermissionService permissionService) {
+    public GallerySlashCommand(
+            GalleryChannelRepository galleryChannelRepository,
+            PermissionService permissionService,
+            AuditService auditService
+    ) {
         this.galleryChannelRepository = galleryChannelRepository;
         this.permissionService = permissionService;
+        this.auditService = auditService;
     }
 
     @Override
@@ -147,7 +154,8 @@ public class GallerySlashCommand implements SlashCommand {
         entity.setEnabled(true);
 
         galleryChannelRepository.save(entity);
-        logger.info("Staff action: configured gallery channel {} (actor={}, guild={})", channelId, event.getUser().getId(), guild.getId());
+        auditService.record(event.getJDA(), AuditService.Action.GALLERY_ADDED, event.getUser().getId(), guild.getId(),
+                AuditService.TARGET_CHANNEL, channelId, "Gallery <#" + channelId + "> added with tag `" + tag + "`");
 
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Gallery Channel Registered")
@@ -177,7 +185,8 @@ public class GallerySlashCommand implements SlashCommand {
         GalleryChannelEntity entity = existing.get();
         entity.setEnabled(false);
         galleryChannelRepository.save(entity);
-        logger.info("Staff action: disabled gallery channel {} (actor={}, guild={})", channelId, event.getUser().getId(), guild.getId());
+        auditService.record(event.getJDA(), AuditService.Action.GALLERY_REMOVED, event.getUser().getId(), guild.getId(),
+                AuditService.TARGET_CHANNEL, channelId, "Gallery <#" + channelId + "> removed");
 
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Gallery Channel Removed")

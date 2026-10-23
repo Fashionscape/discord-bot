@@ -5,6 +5,7 @@ import dev.salmonllama.fsbot.database.entities.BlockedServerEntity;
 import dev.salmonllama.fsbot.database.entities.BlockedUserEntity;
 import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
 import dev.salmonllama.fsbot.services.BlocklistService;
+import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Member;
@@ -42,6 +43,9 @@ class BlockSlashCommandTest {
     private StaticPermissionRepository staticPermissionRepository;
 
     @Mock
+    private AuditService auditService;
+
+    @Mock
     private SlashCommandInteractionEvent slashEvent;
 
     @Mock
@@ -65,7 +69,7 @@ class BlockSlashCommandTest {
                 new BotProperties.DiscordProperties("token", 123456789L, "dev-guild", "home-guild"),
                 new BotProperties.MinioProperties("http://localhost:9000", "access", "secret", "bucket", "https://media.fashionscape.org")
         );
-        command = new BlockSlashCommand(blocklistService, new PermissionService(staticPermissionRepository, properties));
+        command = new BlockSlashCommand(blocklistService, new PermissionService(staticPermissionRepository, properties), auditService);
 
         when(slashEvent.getUser()).thenReturn(mockUser);
         when(mockUser.getId()).thenReturn("123456789"); // bot owner
@@ -110,7 +114,7 @@ class BlockSlashCommandTest {
         command.execute(slashEvent);
 
         verify(slashEvent).reply(contains("do not have permission"));
-        verifyNoInteractions(blocklistService);
+        verifyNoInteractions(blocklistService, auditService);
     }
 
     @Test
@@ -170,6 +174,8 @@ class BlockSlashCommandTest {
 
         verify(blocklistService).blockUser(eq("4001"), any());
         verify(slashEvent).replyEmbeds(any(MessageEmbed.class));
+        verify(auditService).record(any(), eq(AuditService.Action.USER_BLOCKED), eq("123456789"), any(),
+                eq(AuditService.TARGET_USER), eq("4001"), any());
 
         // Test unblock
         when(slashEvent.getOption(eq("action"), any())).thenReturn("unblock");
@@ -178,6 +184,8 @@ class BlockSlashCommandTest {
         command.execute(slashEvent);
 
         verify(blocklistService).unblockUser("4001");
+        verify(auditService).record(any(), eq(AuditService.Action.USER_UNBLOCKED), eq("123456789"), any(),
+                eq(AuditService.TARGET_USER), eq("4001"), any());
     }
 
     @Test
@@ -215,5 +223,6 @@ class BlockSlashCommandTest {
         verify(slashEvent).replyEmbeds(captor.capture());
         MessageEmbed embed = captor.getValue();
         assertEquals("Blocked Users (1)", embed.getTitle());
+        verify(auditService).record(any(), eq(AuditService.Action.BLOCKLIST_VIEWED), eq("123456789"), any(), any(), any(), any());
     }
 }

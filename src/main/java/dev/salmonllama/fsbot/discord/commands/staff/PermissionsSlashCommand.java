@@ -2,6 +2,7 @@ package dev.salmonllama.fsbot.discord.commands.staff;
 
 import dev.salmonllama.fsbot.database.entities.StaticPermissionEntity;
 import dev.salmonllama.fsbot.discord.commands.SlashCommand;
+import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
@@ -14,8 +15,6 @@ import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
 import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.awt.Color;
@@ -28,13 +27,14 @@ import java.util.Optional;
 @Component
 public class PermissionsSlashCommand implements SlashCommand {
 
-    private static final Logger logger = LoggerFactory.getLogger(PermissionsSlashCommand.class);
     private static final Color EMBED_COLOR = new Color(0x5865F2);
 
     private final PermissionService permissionService;
+    private final AuditService auditService;
 
-    public PermissionsSlashCommand(PermissionService permissionService) {
+    public PermissionsSlashCommand(PermissionService permissionService, AuditService auditService) {
         this.permissionService = permissionService;
+        this.auditService = auditService;
     }
 
     @Override
@@ -110,7 +110,7 @@ public class PermissionsSlashCommand implements SlashCommand {
             return;
         }
 
-        logPrivilegedAction(event, "granted " + type + " to user " + target.getId());
+        audit(event, AuditService.Action.PERMISSION_GRANTED, target.getId(), "Granted `" + type + "`");
         event.reply("Granted `" + type + "` to " + target.getAsMention() + " (`" + target.getId() + "`).")
                 .setEphemeral(true)
                 .queue();
@@ -129,7 +129,7 @@ public class PermissionsSlashCommand implements SlashCommand {
             return;
         }
 
-        logPrivilegedAction(event, "revoked " + type + " from user " + target.getId());
+        audit(event, AuditService.Action.PERMISSION_REVOKED, target.getId(), "Revoked `" + type + "`");
         event.reply("Revoked `" + type + "` from " + target.getAsMention() + " (`" + target.getId() + "`).")
                 .setEphemeral(true)
                 .queue();
@@ -138,6 +138,7 @@ public class PermissionsSlashCommand implements SlashCommand {
     private void handleList(SlashCommandInteractionEvent event) {
         User target = Optional.ofNullable(event.getOption("user")).map(OptionMapping::getAsUser).orElse(null);
         List<StaticPermissionEntity> permissions = permissionService.list(target != null ? target.getId() : null);
+        audit(event, AuditService.Action.PERMISSIONS_VIEWED, target != null ? target.getId() : null, null);
 
         if (permissions.isEmpty()) {
             String message = target != null
@@ -161,8 +162,9 @@ public class PermissionsSlashCommand implements SlashCommand {
         event.replyEmbeds(embed.build()).setEphemeral(true).queue();
     }
 
-    private void logPrivilegedAction(SlashCommandInteractionEvent event, String action) {
+    private void audit(SlashCommandInteractionEvent event, AuditService.Action action, String targetUserId, String details) {
         String guildId = event.getGuild() != null ? event.getGuild().getId() : null;
-        logger.info("Staff action: {} (actor={}, guild={})", action, event.getUser().getId(), guildId);
+        auditService.record(event.getJDA(), action, event.getUser().getId(), guildId,
+                targetUserId != null ? AuditService.TARGET_USER : null, targetUserId, details);
     }
 }

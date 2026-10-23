@@ -114,7 +114,7 @@ Items 1–3 of that review (cross-server staff permissions, vote integrity, dele
 **Why:** These existed before v3 and haven't been ported to slash commands.
 
 ### Moderation Tooling
-**What:** An audit-log table of staff actions, report buttons on outfits, an optional review queue before an outfit is published, and a hard delete that also removes the image.
+**What:** Report buttons on outfits, an optional review queue before an outfit is published, and a hard delete that also removes the image.
 **Why:** Gives moderators a record and a workflow instead of log lines.
 
 ### User Data Self-Service
