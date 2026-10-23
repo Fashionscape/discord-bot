@@ -14,6 +14,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MinIOContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -25,7 +26,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class MinioIntegrationTest {
 
     @Container
-    static MinIOContainer minio = new MinIOContainer("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z")
+    static MinIOContainer minio = new MinIOContainer(DockerImageName.parse("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z")
+            .asCompatibleSubstituteFor("minio/minio"))
             .withUserName("minioadmin")
             .withPassword("minioadmin");
 
