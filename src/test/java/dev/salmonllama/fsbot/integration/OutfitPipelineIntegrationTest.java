@@ -37,9 +37,7 @@ class OutfitPipelineIntegrationTest {
             .withPassword("fsbot_test");
 
     @Container
-    static MinIOContainer minio = new MinIOContainer("minio/minio:latest")
-            .withUserName("minioadmin")
-            .withPassword("minioadmin");
+    static MinIOContainer minio = MinioTestContainer.create();
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
