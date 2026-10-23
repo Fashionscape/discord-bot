@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class MinioIntegrationTest {
 
     @Container
-    static MinIOContainer minio = new MinIOContainer("minio/minio:latest")
+    static MinIOContainer minio = new MinIOContainer("quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z")
             .withUserName("minioadmin")
             .withPassword("minioadmin");
 
