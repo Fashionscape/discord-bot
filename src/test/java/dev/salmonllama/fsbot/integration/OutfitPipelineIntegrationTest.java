@@ -81,7 +81,7 @@ class OutfitPipelineIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        minioStorageService.ensureBucketExists();
+        minioStorageService.prepareBucket();
         outfitRepository.deleteAll();
         galleryChannelRepository.deleteAll();
     }
@@ -162,18 +162,28 @@ class OutfitPipelineIntegrationTest {
         assertEquals(1, userMatches.size());
         assertEquals(outfitId, userMatches.getFirst().getId());
 
-        // 7. Soft delete outfit
-        entity.setDeleted(true);
-        entity.setUpdated(Instant.now());
-        outfitRepository.save(entity);
+        // 7. Delete outfit: the image moves out of public read and the outfit is marked deleted
+        assertTrue(outfitService.delete(outfitId, submitterId, guildId, null));
 
         // Verify it is no longer returned in active queries
         assertTrue(outfitRepository.findByIdAndDeletedFalse(outfitId).isEmpty());
         assertEquals(0, outfitRepository.countByDeletedFalse());
         assertTrue(outfitRepository.findByTagIgnoreCaseAndDeletedFalse("retro").isEmpty());
 
-        // Verify the asset remains in MinIO object storage for audit/recovery purposes
+        OutfitEntity deleted = outfitRepository.findById(outfitId).orElseThrow();
+        assertEquals(submitterId, deleted.getDeletedBy());
+        assertNotNull(deleted.getDeletedAt());
+
+        // The image is kept, but only under the quarantine prefix
+        assertFalse(minioStorageService.objectExists("outfits/fit-pipeline-1.png"));
+        assertTrue(minioStorageService.objectExists("deleted/outfits/fit-pipeline-1.png"));
+        assertArrayEquals(imageBytes, outfitService.getDeletedImage(deleted).orElseThrow().data());
+
+        // 8. Restore moves it back
+        assertTrue(outfitService.restore(outfitId, "staff-1", guildId, null));
+        assertTrue(outfitRepository.findByIdAndDeletedFalse(outfitId).isPresent());
         assertTrue(minioStorageService.objectExists("outfits/fit-pipeline-1.png"));
+        assertFalse(minioStorageService.objectExists("deleted/outfits/fit-pipeline-1.png"));
 
         // Clean up MinIO object
         minioStorageService.deleteObject("outfits/fit-pipeline-1.png");
