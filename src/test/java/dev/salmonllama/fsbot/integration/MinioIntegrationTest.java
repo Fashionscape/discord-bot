@@ -25,9 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class MinioIntegrationTest {
 
     @Container
-    static MinIOContainer minio = new MinIOContainer("minio/minio:latest")
-            .withUserName("minioadmin")
-            .withPassword("minioadmin");
+    static MinIOContainer minio = MinioTestContainer.create();
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
