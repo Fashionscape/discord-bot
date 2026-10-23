@@ -130,7 +130,7 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         OutfitEntity outfit = outfitOpt.get();
         EmbedBuilder embed = buildOutfitEmbed(outfit);
 
-        Button upvoteBtn = Button.primary("gallery:upvote:" + outfit.getId(), "❤️ Upvote (" + outfit.getDisplayCount() + ")");
+        Button upvoteBtn = Button.primary("gallery:upvote:" + outfit.getId(), "Upvote (" + outfit.getDisplayCount() + ")");
         event.replyEmbeds(embed.build())
                 .setActionRow(upvoteBtn)
                 .queue();
