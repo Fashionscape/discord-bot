@@ -187,6 +187,8 @@ The project is executing the v3 modernization plan documented in `docs/v3_archit
   - Modernize `ScapeFashionClient` using Java 21 `HttpClient` and Jackson/Gson.
   - Port OSRS & RS3 color search commands.
   - Port staff moderation and blocklist commands (`/block user`, `/block server`).
-- [ ] **Phase 6: Integration Tests & Final Release (`feature/v3-phase6-testing`):**
+- [x] **Phase 6: Integration Tests & Final Release (`feature/v3-phase6-testing`):**
   - Testcontainers for PostgreSQL and MinIO end-to-end integration tests.
-  - Final PR of `v3-modernization` into `main`.
+  - Repository integration tests and MinIO storage upload/retrieval tests.
+  - End-to-end slash command dispatching and virtual thread concurrency verification.
+  - Final integration ready for release.
