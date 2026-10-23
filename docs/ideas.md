@@ -21,3 +21,7 @@ This is a combination of both things that I want to do, and features that were r
 ### Thumbs Listener / Announcements / News / Votes
 **What:** A configurable listener that provides social media-like pre-set reactions to messages. Designed to be used in announcement or similar style channels. Enabled and configured on a per-server basis by the Administrators, should be able to handle up to 5 (or more?) channels and react to each message with a thumbs up/down.
 **Why:** Helps start reactions, especially in scenarios where all server members (including staff) have their votes counted.
+
+### Per Server Gallery and Permissions
+**What:** Galleries, images, configs, and permissions should be applied at the server level, so that each server can manage its own galleries, images, etc. This prevents server Administrators from being able to manage the assets and configurations of another server. Fashionscape home server still retains master privileges and should have commands available to Fashionscape Administrators only (StaticPermission#FSHomeAdmin) for managing server block lists and potentially even the ability of other servers to create and manage galleries.
+**Why:** This prevents cross-moderation, whether by accident or malicious intent. It keeps databases clean, and gives other servers more ownership of their own channels and galleries. It could also potentially be leveraged to provide monetized service tiers by enabling supporting servers to pay for the ability to create galleries.

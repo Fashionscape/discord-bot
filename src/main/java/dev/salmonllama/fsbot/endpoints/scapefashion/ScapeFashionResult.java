@@ -34,4 +34,12 @@ public class ScapeFashionResult {
     public List<ScapeFashionItem> getItems() {
         return items;
     }
+
+    public boolean hasItems() {
+        return items != null && !items.isEmpty();
+    }
+
+    public java.util.Optional<ScapeFashionItem> getBestMatch() {
+        return hasItems() ? java.util.Optional.of(items.get(0)) : java.util.Optional.empty();
+    }
 }
