@@ -20,7 +20,6 @@ public class SqliteToPostgresMigrationService {
 
     private static final Logger logger = LoggerFactory.getLogger(SqliteToPostgresMigrationService.class);
 
-    private final OutfitRepository outfitRepository;
     private final GalleryChannelRepository galleryChannelRepository;
     private final ServerConfigRepository serverConfigRepository;
     private final BlockedUserRepository blockedUserRepository;
@@ -29,7 +28,6 @@ public class SqliteToPostgresMigrationService {
     private final ColorRoleRepository colorRoleRepository;
 
     public SqliteToPostgresMigrationService(
-            OutfitRepository outfitRepository,
             GalleryChannelRepository galleryChannelRepository,
             ServerConfigRepository serverConfigRepository,
             BlockedUserRepository blockedUserRepository,
@@ -37,7 +35,6 @@ public class SqliteToPostgresMigrationService {
             StaticPermissionRepository staticPermissionRepository,
             ColorRoleRepository colorRoleRepository
     ) {
-        this.outfitRepository = outfitRepository;
         this.galleryChannelRepository = galleryChannelRepository;
         this.serverConfigRepository = serverConfigRepository;
         this.blockedUserRepository = blockedUserRepository;
@@ -71,49 +68,23 @@ public class SqliteToPostgresMigrationService {
         return report;
     }
 
+    /**
+     * Legacy outfits don't record the server and channel they were submitted in, which v3
+     * requires on every outfit. They are counted and skipped until a dedicated import can
+     * supply that origin.
+     */
     private void migrateOutfits(Connection conn, MigrationReport report) {
         if (!tableExists(conn, "outfits")) {
             return;
         }
 
-        String sql = "SELECT id, link, submitter, tag, meta, discord_name, created, updated, deleted, featured, display_count, delete_hash FROM outfits";
-        List<OutfitEntity> entities = new ArrayList<>();
-
-        try (PreparedStatement stmt = conn.prepareStatement(sql);
+        try (PreparedStatement stmt = conn.prepareStatement("SELECT COUNT(*) FROM outfits");
              ResultSet rs = stmt.executeQuery()) {
 
-            while (rs.next()) {
-                String id = rs.getString("id");
-                String link = rs.getString("link");
-                String submitter = rs.getString("submitter");
-
-                if (id == null || link == null || submitter == null) {
-                    continue;
-                }
-
-                OutfitEntity entity = new OutfitEntity(
-                        id,
-                        link,
-                        submitter,
-                        rs.getString("tag"),
-                        rs.getString("meta"),
-                        rs.getString("discord_name"),
-                        parseInstant(rs.getString("created")),
-                        parseInstant(rs.getString("updated")),
-                        parseBoolean(rs.getString("deleted")),
-                        parseBoolean(rs.getString("featured")),
-                        rs.getInt("display_count"),
-                        rs.getString("delete_hash")
-                );
-
-                entities.add(entity);
-            }
-
-            outfitRepository.saveAll(entities);
-            report.outfitsMigrated = entities.size();
-            logger.info("Migrated {} outfits", entities.size());
+            report.outfitsSkipped = rs.next() ? rs.getInt(1) : 0;
+            logger.warn("Skipped {} legacy outfits: they have no server or channel ID, which v3 requires", report.outfitsSkipped);
         } catch (SQLException e) {
-            logger.error("Error migrating outfits: {}", e.getMessage(), e);
+            logger.error("Error counting legacy outfits: {}", e.getMessage(), e);
             report.errors.add("outfits: " + e.getMessage());
         }
     }
@@ -367,15 +338,9 @@ public class SqliteToPostgresMigrationService {
         return Instant.now();
     }
 
-    private boolean parseBoolean(String text) {
-        if (text == null) {
-            return false;
-        }
-        return "true".equalsIgnoreCase(text) || "1".equals(text) || "yes".equalsIgnoreCase(text);
-    }
-
     public static class MigrationReport {
         public int outfitsMigrated = 0;
+        public int outfitsSkipped = 0;
         public int galleriesMigrated = 0;
         public int serverConfigsMigrated = 0;
         public int blockedUsersMigrated = 0;
@@ -386,8 +351,8 @@ public class SqliteToPostgresMigrationService {
 
         @Override
         public String toString() {
-            return String.format("MigrationReport[outfits=%d, galleries=%d, configs=%d, blockedUsers=%d, blockedServers=%d, permissions=%d, colorRoles=%d, errors=%d]",
-                    outfitsMigrated, galleriesMigrated, serverConfigsMigrated, blockedUsersMigrated,
+            return String.format("MigrationReport[outfits=%d, outfitsSkipped=%d, galleries=%d, configs=%d, blockedUsers=%d, blockedServers=%d, permissions=%d, colorRoles=%d, errors=%d]",
+                    outfitsMigrated, outfitsSkipped, galleriesMigrated, serverConfigsMigrated, blockedUsersMigrated,
                     blockedServersMigrated, staticPermissionsMigrated, colorRolesMigrated, errors.size());
         }
     }

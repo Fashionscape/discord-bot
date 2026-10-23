@@ -48,8 +48,8 @@ class ImgurToMinioRehostServiceTest {
 
     @Test
     void rehostAllDryRunDoesNotUploadOrUpdateDatabase() {
-        OutfitEntity outfit1 = new OutfitEntity("id-1", "https://i.imgur.com/abc.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null);
-        OutfitEntity outfit2 = new OutfitEntity("id-2", "https://i.imgur.com/xyz.jpg", "user2", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null);
+        OutfitEntity outfit1 = new OutfitEntity("id-1", "https://i.imgur.com/abc.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        OutfitEntity outfit2 = new OutfitEntity("id-2", "https://i.imgur.com/xyz.jpg", "user2", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
 
         when(outfitRepository.findByLinkContaining("imgur.com")).thenReturn(List.of(outfit1, outfit2));
 
@@ -66,7 +66,7 @@ class ImgurToMinioRehostServiceTest {
 
     @Test
     void rehostAllLiveSuccessfullyRehostsOutfits() throws Exception {
-        OutfitEntity outfit = new OutfitEntity("id-100", "https://i.imgur.com/test.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null);
+        OutfitEntity outfit = new OutfitEntity("id-100", "https://i.imgur.com/test.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
         when(outfitRepository.findByLinkContaining("imgur.com")).thenReturn(List.of(outfit));
 
         byte[] fakeData = new byte[]{10, 20, 30};
@@ -93,7 +93,7 @@ class ImgurToMinioRehostServiceTest {
 
     @Test
     void rehostAllHandlesHttp404Gracefully() throws Exception {
-        OutfitEntity outfit = new OutfitEntity("id-404", "https://i.imgur.com/deleted.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null);
+        OutfitEntity outfit = new OutfitEntity("id-404", "https://i.imgur.com/deleted.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
         when(outfitRepository.findByLinkContaining("imgur.com")).thenReturn(List.of(outfit));
 
         when(httpResponse.statusCode()).thenReturn(404);
@@ -113,7 +113,7 @@ class ImgurToMinioRehostServiceTest {
 
     @Test
     void rehostAllHandlesNetworkExceptionGracefully() throws Exception {
-        OutfitEntity outfit = new OutfitEntity("id-err", "https://i.imgur.com/error.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null);
+        OutfitEntity outfit = new OutfitEntity("id-err", "https://i.imgur.com/error.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
         when(outfitRepository.findByLinkContaining("imgur.com")).thenReturn(List.of(outfit));
 
         when(httpClient.send(any(HttpRequest.class), any())).thenThrow(new IOException("Connection timed out"));
@@ -130,9 +130,9 @@ class ImgurToMinioRehostServiceTest {
 
     @Test
     void rehostAllRespectsLimit() {
-        OutfitEntity outfit1 = new OutfitEntity("id-1", "https://i.imgur.com/1.png", "u", "t", null, "n", Instant.now(), Instant.now(), false, false, 0, null);
-        OutfitEntity outfit2 = new OutfitEntity("id-2", "https://i.imgur.com/2.png", "u", "t", null, "n", Instant.now(), Instant.now(), false, false, 0, null);
-        OutfitEntity outfit3 = new OutfitEntity("id-3", "https://i.imgur.com/3.png", "u", "t", null, "n", Instant.now(), Instant.now(), false, false, 0, null);
+        OutfitEntity outfit1 = new OutfitEntity("id-1", "https://i.imgur.com/1.png", "u", "t", null, "n", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        OutfitEntity outfit2 = new OutfitEntity("id-2", "https://i.imgur.com/2.png", "u", "t", null, "n", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        OutfitEntity outfit3 = new OutfitEntity("id-3", "https://i.imgur.com/3.png", "u", "t", null, "n", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
 
         when(outfitRepository.findByLinkContaining("imgur.com")).thenReturn(new java.util.ArrayList<>(List.of(outfit1, outfit2, outfit3)));
 

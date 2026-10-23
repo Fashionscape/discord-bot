@@ -1,10 +1,13 @@
 package dev.salmonllama.fsbot.discord.listeners;
 
+import dev.salmonllama.fsbot.config.BotProperties;
 import dev.salmonllama.fsbot.database.entities.GalleryChannelEntity;
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.GalleryChannelRepository;
 import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
+import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
 import dev.salmonllama.fsbot.services.BlocklistService;
+import dev.salmonllama.fsbot.services.PermissionService;
 import dev.salmonllama.fsbot.storage.MinioStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
 import net.dv8tion.jda.api.Permission;
@@ -50,6 +53,9 @@ class GalleryEventListenerTest {
     private BlocklistService blocklistService;
 
     @Mock
+    private StaticPermissionRepository staticPermissionRepository;
+
+    @Mock
     private MessageReceivedEvent messageEvent;
 
     @Mock
@@ -86,11 +92,16 @@ class GalleryEventListenerTest {
 
     @BeforeEach
     void setUp() {
+        BotProperties properties = new BotProperties(
+                new BotProperties.DiscordProperties("token", 123456789L, "", "home-guild"),
+                new BotProperties.MinioProperties("http://localhost:9000", "access", "secret", "bucket", "https://media.fashionscape.org")
+        );
         listener = new GalleryEventListener(
                 galleryChannelRepository,
                 outfitRepository,
                 minioStorageService,
-                blocklistService
+                blocklistService,
+                new PermissionService(staticPermissionRepository, properties)
         );
     }
 
@@ -205,6 +216,8 @@ class GalleryEventListenerTest {
         assertEquals("osrs", savedOutfit.getTag());
         assertEquals("My cool outfit", savedOutfit.getMeta());
         assertEquals("https://media.fashionscape.org/outfits/id.png", savedOutfit.getLink());
+        assertEquals("srv-1", savedOutfit.getServerId());
+        assertEquals("chan-gallery", savedOutfit.getChannelId());
         verify(messageCreateAction).queue(any(), any());
     }
 
@@ -216,7 +229,9 @@ class GalleryEventListenerTest {
 
         OutfitEntity outfit = new OutfitEntity(
                 "outfit-99", "https://media.fashionscape.org/1.png", "user-1", "tag", null,
-                "Player", Instant.now(), Instant.now(), false, false, 3, null
+                "Player", Instant.now(), Instant.now(), false, false, 3, null,
+                "server-1",
+                "channel-1"
         );
         when(outfitRepository.findByIdAndDeletedFalse("outfit-99")).thenReturn(Optional.of(outfit));
         when(buttonEvent.editComponents(any(net.dv8tion.jda.api.interactions.components.ActionRow.class)))
@@ -250,7 +265,9 @@ class GalleryEventListenerTest {
 
         OutfitEntity outfit = new OutfitEntity(
                 "outfit-99", "https://media.fashionscape.org/1.png", "user-submitter", "tag", null,
-                "Player", Instant.now(), Instant.now(), false, false, 0, null
+                "Player", Instant.now(), Instant.now(), false, false, 0, null,
+                "server-1",
+                "channel-1"
         );
         when(outfitRepository.findByIdAndDeletedFalse("outfit-99")).thenReturn(Optional.of(outfit));
         when(buttonEvent.editMessageEmbeds(any(MessageEmbed.class))).thenReturn(messageEditCallbackAction);
@@ -285,7 +302,9 @@ class GalleryEventListenerTest {
 
         OutfitEntity outfit = new OutfitEntity(
                 "outfit-99", "https://media.fashionscape.org/1.png", "author-owner", "tag", null,
-                "Player", Instant.now(), Instant.now(), false, false, 0, null
+                "Player", Instant.now(), Instant.now(), false, false, 0, null,
+                "server-1",
+                "channel-1"
         );
         when(outfitRepository.findByIdAndDeletedFalse("outfit-99")).thenReturn(Optional.of(outfit));
         when(buttonEvent.reply(anyString())).thenReturn(replyCallbackAction);
@@ -296,5 +315,73 @@ class GalleryEventListenerTest {
         assertFalse(outfit.isDeleted());
         verify(outfitRepository, never()).save(any());
         verify(buttonEvent).reply(contains("do not have permission"));
+    }
+
+    @Test
+    void testHandleDeleteByModeratorOfAnotherServerForbidden() {
+        when(buttonEvent.getComponentId()).thenReturn("gallery:delete:outfit-99");
+        when(buttonEvent.getUser()).thenReturn(author);
+        when(author.getId()).thenReturn("other-server-mod");
+        when(buttonEvent.getMember()).thenReturn(member);
+        when(member.hasPermission(Permission.ADMINISTRATOR)).thenReturn(true);
+        when(member.getGuild()).thenReturn(guild);
+        when(guild.getId()).thenReturn("server-2");
+
+        OutfitEntity outfit = new OutfitEntity(
+                "outfit-99", "https://media.fashionscape.org/1.png", "author-owner", "tag", null,
+                "Player", Instant.now(), Instant.now(), false, false, 0, null,
+                "server-1",
+                "channel-1"
+        );
+        when(outfitRepository.findByIdAndDeletedFalse("outfit-99")).thenReturn(Optional.of(outfit));
+        when(buttonEvent.reply(anyString())).thenReturn(replyCallbackAction);
+        when(replyCallbackAction.setEphemeral(true)).thenReturn(replyCallbackAction);
+
+        listener.handle(buttonEvent);
+
+        assertFalse(outfit.isDeleted());
+        verify(outfitRepository, never()).save(any());
+        verify(buttonEvent).reply(contains("do not have permission"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testHandleDeleteByModeratorOfSameServer() {
+        when(buttonEvent.getComponentId()).thenReturn("gallery:delete:outfit-99");
+        when(buttonEvent.getUser()).thenReturn(author);
+        when(author.getId()).thenReturn("home-mod");
+        when(author.getAsMention()).thenReturn("<@home-mod>");
+        when(buttonEvent.getMember()).thenReturn(member);
+        when(member.hasPermission(Permission.ADMINISTRATOR)).thenReturn(false);
+        when(member.hasPermission(Permission.MANAGE_SERVER)).thenReturn(false);
+        when(member.hasPermission(Permission.MESSAGE_MANAGE)).thenReturn(true);
+        when(member.getGuild()).thenReturn(guild);
+        when(guild.getId()).thenReturn("server-1");
+        when(buttonEvent.getHook()).thenReturn(interactionHook);
+
+        OutfitEntity outfit = new OutfitEntity(
+                "outfit-99", "https://media.fashionscape.org/1.png", "author-owner", "tag", null,
+                "Player", Instant.now(), Instant.now(), false, false, 0, null,
+                "server-1",
+                "channel-1"
+        );
+        when(outfitRepository.findByIdAndDeletedFalse("outfit-99")).thenReturn(Optional.of(outfit));
+        when(buttonEvent.editMessageEmbeds(any(MessageEmbed.class))).thenReturn(messageEditCallbackAction);
+        when(messageEditCallbackAction.setComponents()).thenReturn(messageEditCallbackAction);
+
+        doAnswer(invocation -> {
+            Consumer<Void> consumer = invocation.getArgument(0);
+            consumer.accept(null);
+            return null;
+        }).when(messageEditCallbackAction).queue(any(Consumer.class));
+
+        WebhookMessageCreateAction webhookAction = mock(WebhookMessageCreateAction.class);
+        when(interactionHook.sendMessage(anyString())).thenReturn(webhookAction);
+        when(webhookAction.setEphemeral(true)).thenReturn(webhookAction);
+
+        listener.handle(buttonEvent);
+
+        assertTrue(outfit.isDeleted());
+        verify(outfitRepository).save(outfit);
     }
 }

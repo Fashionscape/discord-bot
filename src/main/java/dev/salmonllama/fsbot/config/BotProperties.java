@@ -11,7 +11,8 @@ public record BotProperties(
     public record DiscordProperties(
             @DefaultValue("") String token,
             @DefaultValue("0") long ownerId,
-            @DefaultValue("") String devGuildId
+            @DefaultValue("") String devGuildId,
+            @DefaultValue("") String homeGuildId
     ) {}
 
     public record MinioProperties(

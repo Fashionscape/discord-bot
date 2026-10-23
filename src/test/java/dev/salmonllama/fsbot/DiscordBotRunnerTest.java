@@ -22,7 +22,7 @@ class DiscordBotRunnerTest {
     @Test
     void testRunWithoutTokenSkipsJDA() throws Exception {
         BotProperties properties = new BotProperties(
-                new BotProperties.DiscordProperties("", 0L, ""),
+                new BotProperties.DiscordProperties("", 0L, "", ""),
                 new BotProperties.MinioProperties("http://localhost:9000", "key", "secret", "bucket", "https://cdn.example.com")
         );
 

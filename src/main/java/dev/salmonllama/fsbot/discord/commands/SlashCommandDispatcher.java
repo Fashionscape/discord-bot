@@ -64,16 +64,15 @@ public class SlashCommandDispatcher extends ListenerAdapter {
     public void onReady(@NotNull ReadyEvent event) {
         logger.info("JDA gateway ready! Logged in as: {}", event.getJDA().getSelfUser().getAsTag());
 
-        List<SlashCommandData> commandDataList = commandRegistry.values().stream()
-                .map(SlashCommand::buildCommandData)
-                .toList();
-
         String devGuildId = properties.discord() != null ? properties.discord().devGuildId() : null;
         if (devGuildId != null && !devGuildId.isBlank()) {
             Guild devGuild = event.getJDA().getGuildById(devGuildId);
             if (devGuild != null) {
-                logger.info("Registering {} commands to dev guild: {} ({})", commandDataList.size(), devGuild.getName(), devGuildId);
-                devGuild.updateCommands().addCommands(commandDataList).queue(
+                List<SlashCommandData> allCommands = commandRegistry.values().stream()
+                        .map(SlashCommand::buildCommandData)
+                        .toList();
+                logger.info("Registering {} commands to dev guild: {} ({})", allCommands.size(), devGuild.getName(), devGuildId);
+                devGuild.updateCommands().addCommands(allCommands).queue(
                         success -> logger.info("Successfully updated dev guild slash commands."),
                         failure -> logger.error("Failed to update dev guild slash commands", failure)
                 );
@@ -83,10 +82,32 @@ public class SlashCommandDispatcher extends ListenerAdapter {
             }
         }
 
-        logger.info("Registering {} global slash commands with Discord...", commandDataList.size());
-        event.getJDA().updateCommands().addCommands(commandDataList).queue(
+        List<SlashCommandData> globalCommands = commandRegistry.values().stream()
+                .filter(cmd -> !cmd.isHomeGuildOnly())
+                .map(SlashCommand::buildCommandData)
+                .toList();
+        List<SlashCommandData> homeCommands = commandRegistry.values().stream()
+                .filter(SlashCommand::isHomeGuildOnly)
+                .map(SlashCommand::buildCommandData)
+                .toList();
+
+        logger.info("Registering {} global slash commands with Discord...", globalCommands.size());
+        event.getJDA().updateCommands().addCommands(globalCommands).queue(
                 success -> logger.info("Successfully updated global slash commands."),
                 failure -> logger.error("Failed to update global slash commands", failure)
+        );
+
+        String homeGuildId = homeGuildId();
+        Guild homeGuild = homeGuildId.isBlank() ? null : event.getJDA().getGuildById(homeGuildId);
+        if (homeGuild == null) {
+            logger.warn("Home guild '{}' is not configured or not found. {} home-server commands were not registered.", homeGuildId, homeCommands.size());
+            return;
+        }
+
+        logger.info("Registering {} home-server commands to {} ({})", homeCommands.size(), homeGuild.getName(), homeGuildId);
+        homeGuild.updateCommands().addCommands(homeCommands).queue(
+                success -> logger.info("Successfully updated home guild slash commands."),
+                failure -> logger.error("Failed to update home guild slash commands", failure)
         );
     }
 
@@ -114,6 +135,14 @@ public class SlashCommandDispatcher extends ListenerAdapter {
             return;
         }
 
+        if (command.isHomeGuildOnly() && !isHomeOrDevGuild(guildId)) {
+            logger.warn("Refused home-server command /{} from user {} in guild {}", commandName, userId, guildId);
+            event.reply("This command can only be used in the FashionScape home server.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         try {
             logger.debug("Executing slash command /{} for user {}", commandName, userId);
             command.execute(event);
@@ -136,6 +165,17 @@ public class SlashCommandDispatcher extends ListenerAdapter {
         String buttonId = event.getComponentId();
         logger.debug("Received button interaction: {}", buttonId);
 
+        String userId = event.getUser().getId();
+        String guildId = event.getGuild() != null ? event.getGuild().getId() : null;
+
+        if (blocklistService.isBlocked(userId, guildId)) {
+            logger.warn("Blocked button interaction attempt from user {} in guild {}", userId, guildId);
+            event.reply("You or this server are blocked from using FashionScape Bot.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
+
         for (ButtonHandler handler : buttonHandlers) {
             if (handler.canHandle(buttonId)) {
                 try {
@@ -153,5 +193,20 @@ public class SlashCommandDispatcher extends ListenerAdapter {
         }
 
         logger.warn("No handler found for button: {}", buttonId);
+    }
+
+    private String homeGuildId() {
+        if (properties.discord() == null || properties.discord().homeGuildId() == null) {
+            return "";
+        }
+        return properties.discord().homeGuildId();
+    }
+
+    private boolean isHomeOrDevGuild(String guildId) {
+        if (guildId == null) {
+            return false;
+        }
+        String devGuildId = properties.discord() != null ? properties.discord().devGuildId() : null;
+        return guildId.equals(homeGuildId()) || guildId.equals(devGuildId);
     }
 }

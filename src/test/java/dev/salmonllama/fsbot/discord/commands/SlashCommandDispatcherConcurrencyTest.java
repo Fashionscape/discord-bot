@@ -149,6 +149,9 @@ class SlashCommandDispatcherConcurrencyTest {
                 executor.submit(() -> {
                     try {
                         ButtonInteractionEvent event = mock(ButtonInteractionEvent.class);
+                        User user = mock(User.class);
+                        when(user.getId()).thenReturn("bench-user-" + id);
+                        when(event.getUser()).thenReturn(user);
                         when(event.getComponentId()).thenReturn("bench:button:" + id);
                         customDispatcher.onButtonInteraction(event);
                     } finally {

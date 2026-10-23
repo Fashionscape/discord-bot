@@ -121,7 +121,9 @@ class OutfitPipelineIntegrationTest {
                 false,
                 false,
                 0,
-                null
+                null,
+                "server-1",
+                "channel-1"
         );
         outfitRepository.save(outfitEntity);
 

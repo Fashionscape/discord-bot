@@ -126,6 +126,7 @@ Configuration uses standard 12-factor principles via Spring Boot `application.ym
 FSBOT_DISCORD_TOKEN=<bot_token>
 FSBOT_OWNER_ID=<discord_owner_id>
 FSBOT_DEV_GUILD_ID=<optional_dev_guild_for_instant_slash_command_sync>
+FSBOT_HOME_GUILD_ID=<home_server_id_for_staff_only_commands>
 
 # PostgreSQL
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/fashionscape

@@ -24,4 +24,11 @@ public interface SlashCommand {
      * Executes the slash command interaction.
      */
     void execute(SlashCommandInteractionEvent event);
+
+    /**
+     * Whether this command is registered in, and accepted from, the home server only.
+     */
+    default boolean isHomeGuildOnly() {
+        return false;
+    }
 }
