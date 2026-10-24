@@ -64,4 +64,8 @@ application {
 
 tasks.named('test') {
     useJUnitPlatform()
+    testLogging {
+        // Print full stack traces in CI, where the HTML test report isn't kept
+        exceptionFormat = 'full'
+    }
 }
