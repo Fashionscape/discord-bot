@@ -17,6 +17,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class OutfitService {
@@ -67,17 +68,26 @@ public class OutfitService {
     }
 
     public Optional<OutfitEntity> findById(String id) {
-        if (id == null || id.isBlank()) {
-            return Optional.empty();
-        }
-        return outfitRepository.findById(id.trim());
+        return parseId(id).flatMap(outfitRepository::findById);
     }
 
     public Optional<OutfitEntity> findActiveById(String id) {
+        return parseId(id).flatMap(outfitRepository::findByIdAndDeletedFalse);
+    }
+
+    /**
+     * Reads an outfit ID typed in a command or carried by a button. Anything that isn't a UUID,
+     * such as a pre-v3 8-character ID, matches no outfit.
+     */
+    private static Optional<UUID> parseId(String id) {
         if (id == null || id.isBlank()) {
             return Optional.empty();
         }
-        return outfitRepository.findByIdAndDeletedFalse(id.trim());
+        try {
+            return Optional.of(UUID.fromString(id.trim()));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     public Page<OutfitEntity> search(String tag, String submitter, Pageable pageable) {
@@ -107,7 +117,7 @@ public class OutfitService {
     @Transactional(rollbackFor = Exception.class)
     public OutfitEntity submit(OutfitEntity outfit, String sourceUrl) throws Exception {
         OutfitEntity saved = outfitRepository.save(outfit);
-        UploadResult upload = storageService.uploadOutfitFromUrl(saved.getId(), sourceUrl);
+        UploadResult upload = storageService.uploadOutfitFromUrl(saved.getId().toString(), sourceUrl);
         saved.setLink(upload.publicUrl());
         return saved;
     }
@@ -119,10 +129,12 @@ public class OutfitService {
      * @return the outcome, or empty if the outfit doesn't exist or is deleted
      */
     @Transactional
-    public Optional<VoteResult> toggleVote(String outfitId, String userId) {
-        if (!outfitRepository.existsByIdAndDeletedFalse(outfitId)) {
+    public Optional<VoteResult> toggleVote(String id, String userId) {
+        Optional<UUID> parsed = parseId(id);
+        if (parsed.isEmpty() || !outfitRepository.existsByIdAndDeletedFalse(parsed.get())) {
             return Optional.empty();
         }
+        UUID outfitId = parsed.get();
 
         boolean added;
         if (outfitRepository.insertVote(outfitId, userId) == 1) {
@@ -151,7 +163,7 @@ public class OutfitService {
      * Counts one more time the outfit was shown by /outfit random.
      */
     @Transactional
-    public void recordShown(String id) {
+    public void recordShown(UUID id) {
         outfitRepository.incrementDisplayCount(id);
     }
 
@@ -165,7 +177,7 @@ public class OutfitService {
      */
     @Transactional
     public boolean delete(String id, String actorId, String guildId, JDA jda) {
-        Optional<OutfitEntity> found = outfitRepository.findByIdAndDeletedFalse(id);
+        Optional<OutfitEntity> found = findActiveById(id);
         if (found.isEmpty()) {
             return false;
         }
@@ -182,11 +194,11 @@ public class OutfitService {
         outfit.setUpdated(Instant.now());
         outfitRepository.save(outfit);
 
-        auditService.record(jda, AuditService.Action.OUTFIT_DELETED, actorId, guildId, AuditService.TARGET_OUTFIT, id,
+        auditService.record(jda, AuditService.Action.OUTFIT_DELETED, actorId, guildId, AuditService.TARGET_OUTFIT, outfit.getId().toString(),
                 actorId.equals(outfit.getSubmitter())
                         ? "Deleted by its submitter"
                         : "Deleted by staff (submitter <@" + outfit.getSubmitter() + ">)");
-        logger.info("Deleted outfit {} (by {})", id, actorId);
+        logger.info("Deleted outfit {} (by {})", outfit.getId(), actorId);
         return true;
     }
 
@@ -198,7 +210,7 @@ public class OutfitService {
      */
     @Transactional
     public boolean restore(String id, String actorId, String guildId, JDA jda) {
-        Optional<OutfitEntity> found = outfitRepository.findById(id).filter(OutfitEntity::isDeleted);
+        Optional<OutfitEntity> found = findById(id).filter(OutfitEntity::isDeleted);
         if (found.isEmpty()) {
             return false;
         }
@@ -215,8 +227,8 @@ public class OutfitService {
         outfit.setUpdated(Instant.now());
         outfitRepository.save(outfit);
 
-        auditService.record(jda, AuditService.Action.OUTFIT_RESTORED, actorId, guildId, AuditService.TARGET_OUTFIT, id, null);
-        logger.info("Restored outfit {} (by {})", id, actorId);
+        auditService.record(jda, AuditService.Action.OUTFIT_RESTORED, actorId, guildId, AuditService.TARGET_OUTFIT, outfit.getId().toString(), null);
+        logger.info("Restored outfit {} (by {})", outfit.getId(), actorId);
         return true;
     }
 

@@ -3,6 +3,7 @@ package dev.salmonllama.fsbot.database.entities;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.UUID;
 
 @Entity
 @Table(name = "outfits", indexes = {
@@ -16,8 +17,8 @@ public class OutfitEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "id", length = 64, nullable = false)
-    private String id;
+    @Column(name = "id", nullable = false)
+    private UUID id;
 
     @Column(name = "link", nullable = false, columnDefinition = "TEXT")
     private String link;
@@ -73,7 +74,7 @@ public class OutfitEntity {
     public OutfitEntity() {
     }
 
-    public OutfitEntity(String id, String link, String submitter, String tag, String meta,
+    public OutfitEntity(UUID id, String link, String submitter, String tag, String meta,
                         String discordName, Instant created, Instant updated, boolean deleted,
                         boolean featured, int displayCount, String deleteHash,
                         String serverId, String channelId) {
@@ -110,11 +111,11 @@ public class OutfitEntity {
 
     // Getters and Setters
 
-    public String getId() {
+    public UUID getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(UUID id) {
         this.id = id;
     }
 

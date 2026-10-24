@@ -118,13 +118,13 @@ class OutfitPipelineIntegrationTest {
                 "server-1",
                 "channel-1"
         ));
-        String outfitId = outfitEntity.getId();
-        assertDoesNotThrow(() -> UUID.fromString(outfitId));
+        UUID outfitId = outfitEntity.getId();
+        assertNotNull(outfitId);
         String imageKey = "outfits/" + outfitId + ".png";
 
         // 3. Upload outfit image to SeaweedFS under that ID
         byte[] imageBytes = "fake-png-image-content".getBytes(StandardCharsets.UTF_8);
-        UploadResult uploadResult = storageService.uploadOutfit(outfitId, imageBytes, "image/png");
+        UploadResult uploadResult = storageService.uploadOutfit(outfitId.toString(), imageBytes, "image/png");
 
         assertNotNull(uploadResult);
         assertEquals(imageKey, uploadResult.objectName());
@@ -150,7 +150,7 @@ class OutfitPipelineIntegrationTest {
         assertArrayEquals(imageBytes, readBackBytes);
 
         // 5. Upvote: one vote per user, counted in PostgreSQL
-        assertEquals(Optional.of(new OutfitService.VoteResult(true, 1)), outfitService.toggleVote(outfitId, "voter-1"));
+        assertEquals(Optional.of(new OutfitService.VoteResult(true, 1)), outfitService.toggleVote(outfitId.toString(), "voter-1"));
 
         OutfitEntity upvoted = outfitRepository.findByIdAndDeletedFalse(outfitId).orElseThrow();
         assertEquals(1, upvoted.getVoteCount());
@@ -165,7 +165,7 @@ class OutfitPipelineIntegrationTest {
         assertEquals(outfitId, userMatches.getFirst().getId());
 
         // 7. Delete outfit: the image moves out of public read and the outfit is marked deleted
-        assertTrue(outfitService.delete(outfitId, submitterId, guildId, null));
+        assertTrue(outfitService.delete(outfitId.toString(), submitterId, guildId, null));
 
         // Verify it is no longer returned in active queries
         assertTrue(outfitRepository.findByIdAndDeletedFalse(outfitId).isEmpty());
@@ -182,7 +182,7 @@ class OutfitPipelineIntegrationTest {
         assertArrayEquals(imageBytes, outfitService.getDeletedImage(deleted).orElseThrow().data());
 
         // 8. Restore moves it back
-        assertTrue(outfitService.restore(outfitId, "staff-1", guildId, null));
+        assertTrue(outfitService.restore(outfitId.toString(), "staff-1", guildId, null));
         assertTrue(outfitRepository.findByIdAndDeletedFalse(outfitId).isPresent());
         assertTrue(storageService.objectExists(imageKey));
         assertFalse(storageService.objectExists("deleted/" + imageKey));

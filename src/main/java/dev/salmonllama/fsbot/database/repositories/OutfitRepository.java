@@ -12,13 +12,14 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface OutfitRepository extends JpaRepository<OutfitEntity, String>, JpaSpecificationExecutor<OutfitEntity> {
+public interface OutfitRepository extends JpaRepository<OutfitEntity, UUID>, JpaSpecificationExecutor<OutfitEntity> {
 
     List<OutfitEntity> findByDeletedFalse();
 
-    Optional<OutfitEntity> findByIdAndDeletedFalse(String id);
+    Optional<OutfitEntity> findByIdAndDeletedFalse(UUID id);
 
     List<OutfitEntity> findBySubmitterAndDeletedFalse(String submitter);
 
@@ -55,30 +56,30 @@ public interface OutfitRepository extends JpaRepository<OutfitEntity, String>, J
 
     List<OutfitEntity> findByLinkContaining(String term);
 
-    boolean existsByIdAndDeletedFalse(String id);
+    boolean existsByIdAndDeletedFalse(UUID id);
 
     // Votes: each statement is a single atomic SQL update. Call them through OutfitService.toggleVote.
 
     @Modifying
     @Query(value = "INSERT INTO outfit_votes (outfit_id, user_id, created) VALUES (:outfitId, :userId, CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING", nativeQuery = true)
-    int insertVote(@Param("outfitId") String outfitId, @Param("userId") String userId);
+    int insertVote(@Param("outfitId") UUID outfitId, @Param("userId") String userId);
 
     @Modifying
     @Query(value = "DELETE FROM outfit_votes WHERE outfit_id = :outfitId AND user_id = :userId", nativeQuery = true)
-    int deleteVote(@Param("outfitId") String outfitId, @Param("userId") String userId);
+    int deleteVote(@Param("outfitId") UUID outfitId, @Param("userId") String userId);
 
     @Modifying
     @Query(value = "UPDATE outfits SET vote_count = vote_count + 1 WHERE id = :id AND deleted = false", nativeQuery = true)
-    int incrementVoteCount(@Param("id") String id);
+    int incrementVoteCount(@Param("id") UUID id);
 
     @Modifying
     @Query(value = "UPDATE outfits SET vote_count = vote_count - 1 WHERE id = :id AND deleted = false AND vote_count > 0", nativeQuery = true)
-    int decrementVoteCount(@Param("id") String id);
+    int decrementVoteCount(@Param("id") UUID id);
 
     @Query(value = "SELECT vote_count FROM outfits WHERE id = :id", nativeQuery = true)
-    Optional<Integer> findVoteCount(@Param("id") String id);
+    Optional<Integer> findVoteCount(@Param("id") UUID id);
 
     @Modifying
     @Query(value = "UPDATE outfits SET display_count = display_count + 1 WHERE id = :id", nativeQuery = true)
-    int incrementDisplayCount(@Param("id") String id);
+    int incrementDisplayCount(@Param("id") UUID id);
 }

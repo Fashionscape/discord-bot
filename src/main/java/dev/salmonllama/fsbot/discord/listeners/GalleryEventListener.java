@@ -3,7 +3,6 @@ package dev.salmonllama.fsbot.discord.listeners;
 import dev.salmonllama.fsbot.database.entities.GalleryChannelEntity;
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.GalleryChannelRepository;
-import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
 import dev.salmonllama.fsbot.discord.components.ButtonHandler;
 import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.BlocklistService;
@@ -37,7 +36,6 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
     private static final String DELETE_PREFIX = "gallery:delete:";
 
     private final GalleryChannelRepository galleryChannelRepository;
-    private final OutfitRepository outfitRepository;
     private final OutfitService outfitService;
     private final BlocklistService blocklistService;
     private final PermissionService permissionService;
@@ -45,14 +43,12 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
 
     public GalleryEventListener(
             GalleryChannelRepository galleryChannelRepository,
-            OutfitRepository outfitRepository,
             OutfitService outfitService,
             BlocklistService blocklistService,
             PermissionService permissionService,
             AuditService auditService
     ) {
         this.galleryChannelRepository = galleryChannelRepository;
-        this.outfitRepository = outfitRepository;
         this.outfitService = outfitService;
         this.blocklistService = blocklistService;
         this.permissionService = permissionService;
@@ -122,7 +118,7 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
                         serverId,
                         channelId
                 ), sourceUrl);
-                String outfitId = outfit.getId();
+                String outfitId = outfit.getId().toString();
 
                 logger.info("Saved outfit {} submitted by {}", outfitId, userId);
                 auditService.record(event.getJDA(), AuditService.Action.OUTFIT_ADDED, userId, serverId,
@@ -194,7 +190,7 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
     }
 
     private void handleDelete(ButtonInteractionEvent event, String outfitId) {
-        Optional<OutfitEntity> outfitOpt = outfitRepository.findByIdAndDeletedFalse(outfitId);
+        Optional<OutfitEntity> outfitOpt = outfitService.findActiveById(outfitId);
 
         if (outfitOpt.isEmpty()) {
             event.reply("This outfit could not be found or has already been removed.")

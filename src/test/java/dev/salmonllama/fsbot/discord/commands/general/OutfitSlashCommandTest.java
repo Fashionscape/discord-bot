@@ -30,6 +30,7 @@ import org.springframework.data.domain.Pageable;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -113,7 +114,7 @@ class OutfitSlashCommandTest {
     @Test
     void testExecuteRandomSuccess() {
         when(slashEvent.getSubcommandName()).thenReturn("random");
-        OutfitEntity outfit = new OutfitEntity("outfit-1", "https://img.png", "1001", "osrs", "cool outfit", "Player1", Instant.now(), Instant.now(), false, false, 3, null, "server-1", "channel-1");
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("b024659c-6488-5fda-adde-f63d03e96f27"), "https://img.png", "1001", "osrs", "cool outfit", "Player1", Instant.now(), Instant.now(), false, false, 3, null, "server-1", "channel-1");
         when(outfitService.getRandomOutfit(null, null)).thenReturn(Optional.of(outfit));
 
         command.execute(slashEvent);
@@ -122,53 +123,53 @@ class OutfitSlashCommandTest {
         verify(slashEvent).replyEmbeds(embedCaptor.capture());
         MessageEmbed embed = embedCaptor.getValue();
         assertEquals("Outfit by Player1", embed.getTitle());
-        verify(outfitService).recordShown("outfit-1");
+        verify(outfitService).recordShown(UUID.fromString("b024659c-6488-5fda-adde-f63d03e96f27"));
         verify(replyCallbackAction).queue();
     }
 
     @Test
     void testExecuteInfoSuccess() {
         when(slashEvent.getSubcommandName()).thenReturn("info");
-        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-123");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("8e6efe94-c34b-5afd-aec1-252df5c4a5de");
 
-        OutfitEntity outfit = new OutfitEntity("outfit-123", "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 7, null, "server-1", "channel-1");
-        when(outfitService.findById("outfit-123")).thenReturn(Optional.of(outfit));
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("8e6efe94-c34b-5afd-aec1-252df5c4a5de"), "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 7, null, "server-1", "channel-1");
+        when(outfitService.findById("8e6efe94-c34b-5afd-aec1-252df5c4a5de")).thenReturn(Optional.of(outfit));
 
         command.execute(slashEvent);
 
         ArgumentCaptor<MessageEmbed> embedCaptor = ArgumentCaptor.forClass(MessageEmbed.class);
         verify(slashEvent).replyEmbeds(embedCaptor.capture());
         MessageEmbed embed = embedCaptor.getValue();
-        assertEquals("Outfit Details: outfit-123", embed.getTitle());
+        assertEquals("Outfit Details: 8e6efe94-c34b-5afd-aec1-252df5c4a5de", embed.getTitle());
         assertTrue(embed.getFields().stream().anyMatch(f -> "Upvotes".equals(f.getName()) && "0".equals(f.getValue())));
         assertTrue(embed.getFields().stream().anyMatch(f -> "Times shown".equals(f.getName()) && "7".equals(f.getValue())));
-        verify(outfitService, never()).recordShown(anyString());
+        verify(outfitService, never()).recordShown(any());
     }
 
     @Test
     void testExecuteDeleteBySubmitter() {
         when(slashEvent.getSubcommandName()).thenReturn("delete");
-        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-to-delete");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("df9499f4-413f-59f8-848b-519790a58953");
 
-        OutfitEntity outfit = new OutfitEntity("outfit-to-delete", "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
-        when(outfitService.findById("outfit-to-delete")).thenReturn(Optional.of(outfit));
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("df9499f4-413f-59f8-848b-519790a58953"), "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        when(outfitService.findById("df9499f4-413f-59f8-848b-519790a58953")).thenReturn(Optional.of(outfit));
 
-        when(outfitService.delete(eq("outfit-to-delete"), eq("1001"), any(), any())).thenReturn(true);
+        when(outfitService.delete(eq("df9499f4-413f-59f8-848b-519790a58953"), eq("1001"), any(), any())).thenReturn(true);
 
         command.execute(slashEvent);
 
-        verify(outfitService).delete(eq("outfit-to-delete"), eq("1001"), any(), any());
+        verify(outfitService).delete(eq("df9499f4-413f-59f8-848b-519790a58953"), eq("1001"), any(), any());
         verify(slashEvent).replyEmbeds(any(MessageEmbed.class));
     }
 
     @Test
     void testExecuteDeleteImageMoveFails() {
         when(slashEvent.getSubcommandName()).thenReturn("delete");
-        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-to-delete");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("df9499f4-413f-59f8-848b-519790a58953");
 
-        OutfitEntity outfit = new OutfitEntity("outfit-to-delete", "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
-        when(outfitService.findById("outfit-to-delete")).thenReturn(Optional.of(outfit));
-        when(outfitService.delete(eq("outfit-to-delete"), eq("1001"), any(), any()))
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("df9499f4-413f-59f8-848b-519790a58953"), "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        when(outfitService.findById("df9499f4-413f-59f8-848b-519790a58953")).thenReturn(Optional.of(outfit));
+        when(outfitService.delete(eq("df9499f4-413f-59f8-848b-519790a58953"), eq("1001"), any(), any()))
                 .thenThrow(new OutfitService.OutfitImageException("boom", new RuntimeException()));
 
         command.execute(slashEvent);
@@ -180,10 +181,10 @@ class OutfitSlashCommandTest {
     @Test
     void testExecuteDeleteAlreadyDeletedLooksMissingToNonStaff() {
         when(slashEvent.getSubcommandName()).thenReturn("delete");
-        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-gone");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("05258b6b-8f8e-575f-82de-95e21856f70f");
 
-        OutfitEntity outfit = new OutfitEntity("outfit-gone", "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), true, false, 0, null, "server-1", "channel-1");
-        when(outfitService.findById("outfit-gone")).thenReturn(Optional.of(outfit));
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("05258b6b-8f8e-575f-82de-95e21856f70f"), "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), true, false, 0, null, "server-1", "channel-1");
+        when(outfitService.findById("05258b6b-8f8e-575f-82de-95e21856f70f")).thenReturn(Optional.of(outfit));
 
         command.execute(slashEvent);
 
@@ -194,14 +195,14 @@ class OutfitSlashCommandTest {
     @Test
     void testInfoOnDeletedOutfitIsNotFoundForNonStaff() {
         when(slashEvent.getSubcommandName()).thenReturn("info");
-        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-gone");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("05258b6b-8f8e-575f-82de-95e21856f70f");
 
-        OutfitEntity outfit = new OutfitEntity("outfit-gone", "https://media.fashionscape.org/outfits/outfit-gone.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), true, false, 0, null, "server-1", "channel-1");
-        when(outfitService.findById("outfit-gone")).thenReturn(Optional.of(outfit));
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("05258b6b-8f8e-575f-82de-95e21856f70f"), "https://media.fashionscape.org/outfits/05258b6b-8f8e-575f-82de-95e21856f70f.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), true, false, 0, null, "server-1", "channel-1");
+        when(outfitService.findById("05258b6b-8f8e-575f-82de-95e21856f70f")).thenReturn(Optional.of(outfit));
 
         command.execute(slashEvent);
 
-        verify(slashEvent).reply("Outfit `outfit-gone` not found.");
+        verify(slashEvent).reply("Outfit `05258b6b-8f8e-575f-82de-95e21856f70f` not found.");
         verify(slashEvent, never()).replyEmbeds(any(MessageEmbed.class));
         verify(outfitService, never()).getDeletedImage(any());
     }
@@ -210,19 +211,19 @@ class OutfitSlashCommandTest {
     @SuppressWarnings("unchecked")
     void testInfoOnDeletedOutfitForStaffIsEphemeralWithAttachedImage() {
         when(slashEvent.getSubcommandName()).thenReturn("info");
-        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-gone");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("05258b6b-8f8e-575f-82de-95e21856f70f");
         when(mockUser.getId()).thenReturn("123456789"); // bot owner id
         when(slashEvent.deferReply(true)).thenReturn(replyCallbackAction);
         when(slashEvent.getHook()).thenReturn(interactionHook);
         when(interactionHook.sendMessageEmbeds(any(MessageEmbed.class))).thenReturn(webhookAction);
         when(webhookAction.addFiles(any(net.dv8tion.jda.api.utils.FileUpload[].class))).thenReturn(webhookAction);
 
-        OutfitEntity outfit = new OutfitEntity("outfit-gone", "https://media.fashionscape.org/outfits/outfit-gone.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), true, false, 0, null, "server-1", "channel-1");
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("05258b6b-8f8e-575f-82de-95e21856f70f"), "https://media.fashionscape.org/outfits/05258b6b-8f8e-575f-82de-95e21856f70f.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), true, false, 0, null, "server-1", "channel-1");
         outfit.setDeletedBy("1001");
         outfit.setDeletedAt(Instant.now());
-        when(outfitService.findById("outfit-gone")).thenReturn(Optional.of(outfit));
+        when(outfitService.findById("05258b6b-8f8e-575f-82de-95e21856f70f")).thenReturn(Optional.of(outfit));
         when(outfitService.getDeletedImage(outfit))
-                .thenReturn(Optional.of(new OutfitService.StoredImage("outfit-gone.png", new byte[]{1})));
+                .thenReturn(Optional.of(new OutfitService.StoredImage("05258b6b-8f8e-575f-82de-95e21856f70f.png", new byte[]{1})));
 
         command.execute(slashEvent);
 
@@ -230,7 +231,7 @@ class OutfitSlashCommandTest {
         ArgumentCaptor<MessageEmbed> embedCaptor = ArgumentCaptor.forClass(MessageEmbed.class);
         verify(interactionHook).sendMessageEmbeds(embedCaptor.capture());
         MessageEmbed embed = embedCaptor.getValue();
-        assertEquals("attachment://outfit-gone.png", embed.getImage().getUrl());
+        assertEquals("attachment://05258b6b-8f8e-575f-82de-95e21856f70f.png", embed.getImage().getUrl());
         assertTrue(embed.getFields().stream().anyMatch(f -> "Deleted by".equals(f.getName()) && "<@1001>".equals(f.getValue())));
         verify(webhookAction).addFiles(any(net.dv8tion.jda.api.utils.FileUpload[].class));
         verify(webhookAction).queue();
@@ -240,13 +241,13 @@ class OutfitSlashCommandTest {
     @Test
     void testExecuteDeleteUnauthorized() {
         when(slashEvent.getSubcommandName()).thenReturn("delete");
-        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-not-mine");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("e05b2bb6-eebd-54be-a9c1-7f114b8199a5");
         when(mockUser.getId()).thenReturn("9999");
         when(slashEvent.getMember()).thenReturn(mockMember);
         when(mockMember.hasPermission(any(Permission.class))).thenReturn(false);
 
-        OutfitEntity outfit = new OutfitEntity("outfit-not-mine", "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
-        when(outfitService.findById("outfit-not-mine")).thenReturn(Optional.of(outfit));
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("e05b2bb6-eebd-54be-a9c1-7f114b8199a5"), "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        when(outfitService.findById("e05b2bb6-eebd-54be-a9c1-7f114b8199a5")).thenReturn(Optional.of(outfit));
 
         command.execute(slashEvent);
 
@@ -257,15 +258,15 @@ class OutfitSlashCommandTest {
     @Test
     void testExecuteDeleteByAdminOfAnotherServerRefused() {
         when(slashEvent.getSubcommandName()).thenReturn("delete");
-        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-elsewhere");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("febd3ab8-89fd-5c4d-b286-e2041422bab2");
         when(mockUser.getId()).thenReturn("9999");
         when(slashEvent.getMember()).thenReturn(mockMember);
         when(mockMember.hasPermission(any(Permission.class))).thenReturn(true);
         when(mockMember.getGuild()).thenReturn(mockGuild);
         when(mockGuild.getId()).thenReturn("server-2");
 
-        OutfitEntity outfit = new OutfitEntity("outfit-elsewhere", "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
-        when(outfitService.findById("outfit-elsewhere")).thenReturn(Optional.of(outfit));
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("febd3ab8-89fd-5c4d-b286-e2041422bab2"), "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        when(outfitService.findById("febd3ab8-89fd-5c4d-b286-e2041422bab2")).thenReturn(Optional.of(outfit));
 
         command.execute(slashEvent);
 
@@ -276,7 +277,7 @@ class OutfitSlashCommandTest {
     @Test
     void testExecuteRestoreByServerAdminRefused() {
         when(slashEvent.getSubcommandName()).thenReturn("restore");
-        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-del");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("a4f42f88-4814-519a-b91f-eb89d216d660");
         when(mockUser.getId()).thenReturn("9999");
         when(slashEvent.getMember()).thenReturn(mockMember);
         when(mockMember.hasPermission(any(Permission.class))).thenReturn(true);
@@ -290,24 +291,24 @@ class OutfitSlashCommandTest {
     @Test
     void testExecuteRestoreByStaff() {
         when(slashEvent.getSubcommandName()).thenReturn("restore");
-        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-del");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("a4f42f88-4814-519a-b91f-eb89d216d660");
         when(mockUser.getId()).thenReturn("123456789"); // bot owner id
 
-        OutfitEntity outfit = new OutfitEntity("outfit-del", "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), true, false, 0, null, "server-1", "channel-1");
-        when(outfitService.findById("outfit-del")).thenReturn(Optional.of(outfit));
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("a4f42f88-4814-519a-b91f-eb89d216d660"), "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), true, false, 0, null, "server-1", "channel-1");
+        when(outfitService.findById("a4f42f88-4814-519a-b91f-eb89d216d660")).thenReturn(Optional.of(outfit));
 
-        when(outfitService.restore(eq("outfit-del"), eq("123456789"), any(), any())).thenReturn(true);
+        when(outfitService.restore(eq("a4f42f88-4814-519a-b91f-eb89d216d660"), eq("123456789"), any(), any())).thenReturn(true);
 
         command.execute(slashEvent);
 
-        verify(outfitService).restore(eq("outfit-del"), eq("123456789"), any(), any());
+        verify(outfitService).restore(eq("a4f42f88-4814-519a-b91f-eb89d216d660"), eq("123456789"), any(), any());
         verify(slashEvent).replyEmbeds(any(MessageEmbed.class));
     }
 
     @Test
     void testSearchAndPaginationButtons() {
         when(slashEvent.getSubcommandName()).thenReturn("search");
-        OutfitEntity outfit = new OutfitEntity("o-1", "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 1, null, "server-1", "channel-1");
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("32ad0af8-600d-573c-97e4-9e1c34755075"), "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 1, null, "server-1", "channel-1");
         when(outfitService.search(any(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(outfit)));
 

@@ -16,6 +16,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -120,7 +121,7 @@ class PostgresIntegrationTest {
         );
 
         outfitRepository.saveAll(List.of(outfit1, outfit2, deletedOutfit));
-        String outfit1Id = outfit1.getId();
+        UUID outfit1Id = outfit1.getId();
 
         assertEquals(2, outfitRepository.countByDeletedFalse());
 

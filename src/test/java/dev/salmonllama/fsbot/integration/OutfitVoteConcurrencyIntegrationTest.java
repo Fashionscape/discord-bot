@@ -23,6 +23,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -62,7 +63,7 @@ class OutfitVoteConcurrencyIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    private String targetId;
+    private UUID targetId;
 
     @BeforeEach
     void setUp() {
@@ -104,16 +105,16 @@ class OutfitVoteConcurrencyIntegrationTest {
     @DisplayName("New outfits start with no votes; a second click takes the vote back")
     void testToggleVote() {
         assertEquals(0, voteCount());
-        assertEquals(Optional.of(new OutfitService.VoteResult(true, 1)), outfitService.toggleVote(targetId, "voter-1"));
-        assertEquals(Optional.of(new OutfitService.VoteResult(true, 2)), outfitService.toggleVote(targetId, "voter-2"));
-        assertEquals(Optional.of(new OutfitService.VoteResult(false, 1)), outfitService.toggleVote(targetId, "voter-1"));
+        assertEquals(Optional.of(new OutfitService.VoteResult(true, 1)), outfitService.toggleVote(targetId.toString(), "voter-1"));
+        assertEquals(Optional.of(new OutfitService.VoteResult(true, 2)), outfitService.toggleVote(targetId.toString(), "voter-2"));
+        assertEquals(Optional.of(new OutfitService.VoteResult(false, 1)), outfitService.toggleVote(targetId.toString(), "voter-1"));
         assertEquals(1, voteRows());
     }
 
     @Test
     @DisplayName("Saving the entity never overwrites vote_count or display_count")
     void testEntitySaveKeepsCounters() {
-        outfitService.toggleVote(targetId, "voter-1");
+        outfitService.toggleVote(targetId.toString(), "voter-1");
         outfitService.recordShown(targetId);
 
         OutfitEntity loaded = outfitRepository.findById(targetId).orElseThrow();
@@ -130,7 +131,7 @@ class OutfitVoteConcurrencyIntegrationTest {
     @Test
     @DisplayName("50 different users voting at once are all counted")
     void testDistinctUsersVoteConcurrently() throws Exception {
-        runConcurrently(50, n -> outfitService.toggleVote(targetId, "voter-" + n));
+        runConcurrently(50, n -> outfitService.toggleVote(targetId.toString(), "voter-" + n));
 
         assertEquals(50, voteCount());
         assertEquals(50, voteRows());
@@ -139,7 +140,7 @@ class OutfitVoteConcurrencyIntegrationTest {
     @Test
     @DisplayName("One user clicking many times at once never counts more than one vote")
     void testSameUserClicksConcurrently() throws Exception {
-        runConcurrently(10, n -> outfitService.toggleVote(targetId, "same-voter"));
+        runConcurrently(10, n -> outfitService.toggleVote(targetId.toString(), "same-voter"));
 
         int count = voteCount();
         assertTrue(count == 0 || count == 1, "vote_count was " + count);
@@ -153,7 +154,7 @@ class OutfitVoteConcurrencyIntegrationTest {
         outfit.setDeleted(true);
         outfitRepository.save(outfit);
 
-        assertTrue(outfitService.toggleVote(targetId, "voter-1").isEmpty());
+        assertTrue(outfitService.toggleVote(targetId.toString(), "voter-1").isEmpty());
         assertEquals(0, voteCount());
         assertEquals(0, voteRows());
     }
