@@ -25,6 +25,10 @@ This is a combination of both things that I want to do, and features that were r
 ### Per Server Gallery and Permissions
 **What:** Galleries, images, configs, and permissions should be applied at the server level, so that each server can manage its own galleries, images, etc. This prevents server Administrators from being able to manage the assets and configurations of another server. Fashionscape home server still retains master privileges and should have commands available to Fashionscape Administrators only (StaticPermission#FSHomeAdmin) for managing server block lists and potentially even the ability of other servers to create and manage galleries.
 **Why:** This prevents cross-moderation, whether by accident or malicious intent. It keeps databases clean, and gives other servers more ownership of their own channels and galleries. It could also potentially be leveraged to provide monetized service tiers by enabling supporting servers to pay for the ability to create galleries.
+### Outfit Diversity Engine
+**What:** Make `/outfit random` favor outfits with a low `display_count` (times shown), for example by weighting the pick toward the least-shown outfits instead of choosing uniformly. `display_count` is incremented every time `/outfit random` shows an outfit.
+**Why:** As the database grows, a uniform random pick keeps repeating some outfits while others are rarely seen. Favoring low-count outfits spreads views across the whole gallery.
+
 ## From the October 2026 v3 review
 
 Items 1–3 of that review (cross-server staff permissions, vote integrity, deleted outfits staying public) are tracked separately in the security fix plan. Everything else it found is below.
