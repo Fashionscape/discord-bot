@@ -39,7 +39,7 @@ Welcome to the **FashionScape Bot** repository. This document serves as a compre
 ```
 .
 ├── Dockerfile                   # Multi-stage production container build (Temurin 21)
-├── docker-compose.yml           # Local dev orchestrating Bot, Postgres 16, and SeaweedFS
+├── docker-compose.yml           # Bot, Postgres 16, SeaweedFS, and the Caddy media proxy
 ├── example.env                  # Environment template for all bot credentials & storage
 ├── build.gradle                 # Gradle dependencies and build plugins
 ├── settings.gradle              # Gradle project settings
@@ -108,7 +108,7 @@ The primary Discord interface has migrated from legacy Javacord text parsing to 
 - **Legacy Migration:** `SqliteToPostgresMigrationService` and `SqliteToPostgresMigrationCli` provide safe migration of legacy `fsbot.db` records into PostgreSQL.
 
 ### 4.4 Object Storage Architecture (SeaweedFS S3)
-- **`SeaweedStorageService`:** Configured via the `S3Client` bean in `SeaweedConfiguration`. Handles bucket initialization, image stream upload, extension resolution, existence checks, and public CDN URL formatting (`https://media.fashionscape.org/outfits/{id}.png`).
+- **`SeaweedStorageService`:** Configured via the `S3Client` bean in `SeaweedConfiguration`. Handles bucket initialization, image stream upload, extension resolution, existence checks, and public CDN URL formatting (`https://media.fashionscape.app/outfits/{id}.png`).
 - **`ImgurToSeaweedRehostCli` / `ImgurToSeaweedRehostService`:** Standalone CLI tool to scan existing outfit records pointing to Imgur, download images, re-upload them to SeaweedFS, and update PostgreSQL URLs.
 
 ### 4.5 Security & Blocklist Subsystem
@@ -138,7 +138,7 @@ SEAWEED_ENDPOINT=http://localhost:8333
 SEAWEED_ACCESS_KEY=seaweedadmin
 SEAWEED_SECRET_KEY=seaweedadmin
 SEAWEED_BUCKET=fashionscape-outfits
-SEAWEED_PUBLIC_URL=https://media.fashionscape.org
+SEAWEED_PUBLIC_URL=https://media.fashionscape.app
 ```
 
 ---
@@ -155,10 +155,11 @@ When working in an Android Laptop / Linux VM environment:
 - **Java 21 LTS Runtime:** Ensure JDK 21 is active. Gradle tasks run via Gradle wrapper 8.10+.
 
 ### Running with Docker Compose
-The repository includes a turnkey `docker-compose.yml` orchestrating the bot with PostgreSQL and SeaweedFS:
+The repository includes a turnkey `docker-compose.yml` orchestrating the bot with PostgreSQL, SeaweedFS, and a Caddy reverse proxy:
 ```bash
 docker compose up -d
 ```
+Caddy (`caddy/Caddyfile`) serves `MEDIA_DOMAIN` (default `media.fashionscape.app`) over automatic HTTPS and maps `/{key}` to the SeaweedFS gateway's `/{bucket}/{key}`. It only passes anonymous `GET`/`HEAD` requests under `outfits/`, the same prefix the bucket policy exposes. Keep `SEAWEED_PUBLIC_URL` set to `https://${MEDIA_DOMAIN}`, point the domain's DNS at the host, and open ports 80 and 443. Certificates persist in the `caddy_data` volume.
 
 ---
 

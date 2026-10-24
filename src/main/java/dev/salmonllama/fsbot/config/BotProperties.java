@@ -20,6 +20,6 @@ public record BotProperties(
             @DefaultValue("seaweedadmin") String accessKey,
             @DefaultValue("seaweedadmin") String secretKey,
             @DefaultValue("fashionscape-outfits") String bucket,
-            @DefaultValue("https://media.fashionscape.org") String publicUrl
+            @DefaultValue("https://media.fashionscape.app") String publicUrl
     ) {}
 }

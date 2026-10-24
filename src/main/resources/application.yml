@@ -9,7 +9,7 @@ fsbot:
     access-key: ${SEAWEED_ACCESS_KEY:seaweedadmin}
     secret-key: ${SEAWEED_SECRET_KEY:seaweedadmin}
     bucket: ${SEAWEED_BUCKET:fashionscape-outfits}
-    public-url: ${SEAWEED_PUBLIC_URL:https://media.fashionscape.org}
+    public-url: ${SEAWEED_PUBLIC_URL:https://media.fashionscape.app}
 
 spring:
   application:
