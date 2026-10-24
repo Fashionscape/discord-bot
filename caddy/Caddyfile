@@ -1,0 +1,33 @@
+# Public media domain for outfit images, served from the SeaweedFS S3 gateway.
+#
+# The bot builds image links as SEAWEED_PUBLIC_URL + "/" + key (for example
+# https://media.fashionscape.app/outfits/abc.png), so this site maps /{key} to the
+# gateway's path-style /{bucket}/{key}. Caddy obtains and renews the TLS certificate
+# itself; DNS for MEDIA_DOMAIN must point at this host with ports 80 and 443 open.
+
+{$MEDIA_DOMAIN:media.fashionscape.app} {
+	# Only anonymous reads of outfits/ are passed through, matching the bucket policy
+	# set by SeaweedStorageService. Everything else (deleted/, listings, writes) is a 404.
+	@public {
+		method GET HEAD
+		path /outfits/*
+	}
+
+	handle @public {
+		# The trailing "?" drops the query string, so S3 subresources (?acl, ?tagging, presigned
+		# signatures) can't be reached through this domain.
+		rewrite * /{$SEAWEED_BUCKET:fashionscape-outfits}{path}?
+
+		reverse_proxy seaweed:8333 {
+			# Keep requests anonymous so the bucket policy is what decides access.
+			header_up -Authorization
+			header_up Host {upstream_hostport}
+		}
+
+		header X-Content-Type-Options nosniff
+	}
+
+	handle {
+		respond 404
+	}
+}
