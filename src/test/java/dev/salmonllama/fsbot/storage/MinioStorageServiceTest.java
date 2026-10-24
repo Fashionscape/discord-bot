@@ -40,7 +40,7 @@ class MinioStorageServiceTest {
     @BeforeEach
     void setUp() {
         properties = new BotProperties(
-                new BotProperties.DiscordProperties("test-token", 123456L, "guild-1"),
+                new BotProperties.DiscordProperties("test-token", 123456L, "guild-1", ""),
                 new BotProperties.MinioProperties(
                         "http://localhost:9000",
                         "minioadmin",

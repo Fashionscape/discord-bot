@@ -80,7 +80,9 @@ class PostgresIntegrationTest {
                 false,
                 true,
                 10,
-                "del-hash-1"
+                "del-hash-1",
+                "server-1",
+                "channel-1"
         );
 
         OutfitEntity outfit2 = new OutfitEntity(
@@ -95,7 +97,9 @@ class PostgresIntegrationTest {
                 false,
                 false,
                 3,
-                "del-hash-2"
+                "del-hash-2",
+                "server-1",
+                "channel-1"
         );
 
         OutfitEntity deletedOutfit = new OutfitEntity(
@@ -110,7 +114,9 @@ class PostgresIntegrationTest {
                 true,
                 false,
                 0,
-                null
+                null,
+                "server-1",
+                "channel-1"
         );
 
         outfitRepository.saveAll(List.of(outfit1, outfit2, deletedOutfit));

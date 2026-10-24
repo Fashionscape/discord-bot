@@ -7,10 +7,10 @@ import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
 import dev.salmonllama.fsbot.discord.components.ButtonHandler;
 import dev.salmonllama.fsbot.services.BlocklistService;
 import dev.salmonllama.fsbot.services.IdService;
+import dev.salmonllama.fsbot.services.PermissionService;
 import dev.salmonllama.fsbot.storage.MinioStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
 import net.dv8tion.jda.api.EmbedBuilder;
-import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
@@ -41,17 +41,20 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
     private final OutfitRepository outfitRepository;
     private final MinioStorageService minioStorageService;
     private final BlocklistService blocklistService;
+    private final PermissionService permissionService;
 
     public GalleryEventListener(
             GalleryChannelRepository galleryChannelRepository,
             OutfitRepository outfitRepository,
             MinioStorageService minioStorageService,
-            BlocklistService blocklistService
+            BlocklistService blocklistService,
+            PermissionService permissionService
     ) {
         this.galleryChannelRepository = galleryChannelRepository;
         this.outfitRepository = outfitRepository;
         this.minioStorageService = minioStorageService;
         this.blocklistService = blocklistService;
+        this.permissionService = permissionService;
     }
 
     @Override
@@ -117,7 +120,9 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
                         false,
                         false,
                         0,
-                        null
+                        null,
+                        serverId,
+                        channelId
                 );
 
                 outfitRepository.save(outfit);
@@ -203,15 +208,8 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
         String userId = event.getUser().getId();
         Member member = event.getMember();
 
-        boolean isSubmitter = outfit.getSubmitter().equals(userId);
-        boolean isStaff = member != null && (
-                member.hasPermission(Permission.ADMINISTRATOR) ||
-                member.hasPermission(Permission.MANAGE_SERVER) ||
-                member.hasPermission(Permission.MESSAGE_MANAGE)
-        );
-
-        if (!isSubmitter && !isStaff) {
-            event.reply("You do not have permission to delete this outfit. Only the submitter or staff members can delete it.")
+        if (!permissionService.canModerateOutfit(userId, member, outfit)) {
+            event.reply("You do not have permission to delete this outfit. Only the submitter, bot staff, or moderators of the server it was submitted in can delete it.")
                     .setEphemeral(true)
                     .queue();
             return;
@@ -220,6 +218,8 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
         outfit.setDeleted(true);
         outfit.setUpdated(Instant.now());
         outfitRepository.save(outfit);
+        logger.info("Outfit action: deleted outfit {} (actor={}, guild={})", outfitId, userId,
+                event.getGuild() != null ? event.getGuild().getId() : null);
 
         EmbedBuilder deletedEmbed = new EmbedBuilder()
                 .setTitle("Outfit Removed")

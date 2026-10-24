@@ -14,7 +14,7 @@ class BotPropertiesTest {
 
     @Test
     void testDefaultValues() {
-        BotProperties.DiscordProperties discord = new BotProperties.DiscordProperties("", 0L, "");
+        BotProperties.DiscordProperties discord = new BotProperties.DiscordProperties("", 0L, "", "");
         BotProperties.MinioProperties minio = new BotProperties.MinioProperties(
                 "http://localhost:9000",
                 "minioadmin",

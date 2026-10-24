@@ -9,7 +9,8 @@ import java.util.Objects;
         @Index(name = "idx_outfits_submitter", columnList = "submitter"),
         @Index(name = "idx_outfits_tag", columnList = "tag"),
         @Index(name = "idx_outfits_deleted", columnList = "deleted"),
-        @Index(name = "idx_outfits_featured", columnList = "featured")
+        @Index(name = "idx_outfits_featured", columnList = "featured"),
+        @Index(name = "idx_outfits_server_id", columnList = "server_id")
 })
 public class OutfitEntity {
 
@@ -50,12 +51,19 @@ public class OutfitEntity {
     @Column(name = "delete_hash", length = 255)
     private String deleteHash;
 
+    @Column(name = "server_id", length = 64, nullable = false)
+    private String serverId;
+
+    @Column(name = "channel_id", length = 64, nullable = false)
+    private String channelId;
+
     public OutfitEntity() {
     }
 
     public OutfitEntity(String id, String link, String submitter, String tag, String meta,
                         String discordName, Instant created, Instant updated, boolean deleted,
-                        boolean featured, int displayCount, String deleteHash) {
+                        boolean featured, int displayCount, String deleteHash,
+                        String serverId, String channelId) {
         this.id = id;
         this.link = link;
         this.submitter = submitter;
@@ -68,6 +76,8 @@ public class OutfitEntity {
         this.featured = featured;
         this.displayCount = displayCount;
         this.deleteHash = deleteHash;
+        this.serverId = Objects.requireNonNull(serverId, "serverId");
+        this.channelId = Objects.requireNonNull(channelId, "channelId");
     }
 
     @PrePersist
@@ -183,6 +193,22 @@ public class OutfitEntity {
         this.deleteHash = deleteHash;
     }
 
+    public String getServerId() {
+        return serverId;
+    }
+
+    public void setServerId(String serverId) {
+        this.serverId = serverId;
+    }
+
+    public String getChannelId() {
+        return channelId;
+    }
+
+    public void setChannelId(String channelId) {
+        this.channelId = channelId;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -204,6 +230,8 @@ public class OutfitEntity {
                 ", submitter='" + submitter + '\'' +
                 ", tag='" + tag + '\'' +
                 ", discordName='" + discordName + '\'' +
+                ", serverId='" + serverId + '\'' +
+                ", channelId='" + channelId + '\'' +
                 ", created=" + created +
                 ", deleted=" + deleted +
                 '}';

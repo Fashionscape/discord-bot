@@ -5,6 +5,7 @@ import dev.salmonllama.fsbot.database.entities.BlockedServerEntity;
 import dev.salmonllama.fsbot.database.entities.BlockedUserEntity;
 import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
 import dev.salmonllama.fsbot.services.BlocklistService;
+import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.MessageEmbed;
@@ -61,10 +62,10 @@ class BlockSlashCommandTest {
     @BeforeEach
     void setUp() {
         properties = new BotProperties(
-                new BotProperties.DiscordProperties("token", 123456789L, "dev-guild"),
+                new BotProperties.DiscordProperties("token", 123456789L, "dev-guild", "home-guild"),
                 new BotProperties.MinioProperties("http://localhost:9000", "access", "secret", "bucket", "https://media.fashionscape.org")
         );
-        command = new BlockSlashCommand(blocklistService, properties, staticPermissionRepository);
+        command = new BlockSlashCommand(blocklistService, new PermissionService(staticPermissionRepository, properties));
 
         when(slashEvent.getUser()).thenReturn(mockUser);
         when(mockUser.getId()).thenReturn("123456789"); // bot owner
@@ -85,6 +86,7 @@ class BlockSlashCommandTest {
         assertTrue(data.getSubcommands().stream().anyMatch(s -> s.getName().equals("user")));
         assertTrue(data.getSubcommands().stream().anyMatch(s -> s.getName().equals("server")));
         assertTrue(data.getSubcommands().stream().anyMatch(s -> s.getName().equals("list")));
+        assertTrue(command.isHomeGuildOnly());
     }
 
     @Test
@@ -96,6 +98,62 @@ class BlockSlashCommandTest {
         command.execute(slashEvent);
 
         verify(slashEvent).reply(contains("do not have permission"));
+    }
+
+    @Test
+    void testAdministratorOfAnotherServerRefused() {
+        when(mockUser.getId()).thenReturn("9999");
+        when(slashEvent.getMember()).thenReturn(mockMember);
+        when(mockMember.hasPermission(any(Permission.class))).thenReturn(true);
+        when(slashEvent.getSubcommandName()).thenReturn("user");
+
+        command.execute(slashEvent);
+
+        verify(slashEvent).reply(contains("do not have permission"));
+        verifyNoInteractions(blocklistService);
+    }
+
+    @Test
+    void testBotAdminAllowed() {
+        when(mockUser.getId()).thenReturn("5555");
+        when(staticPermissionRepository.existsByUserIdAndPermission("5555", "admin")).thenReturn(true);
+        when(slashEvent.getSubcommandName()).thenReturn("list");
+        when(slashEvent.getOption(eq("type"), any())).thenReturn("users");
+        when(blocklistService.getAllBlockedUsers()).thenReturn(List.of());
+
+        command.execute(slashEvent);
+
+        verify(blocklistService).getAllBlockedUsers();
+    }
+
+    @Test
+    void testCannotBlockOwnerOrBotAdmin() {
+        when(slashEvent.getSubcommandName()).thenReturn("user");
+        when(slashEvent.getOption(eq("action"), any())).thenReturn("block");
+        when(slashEvent.getOption(eq("user"), any())).thenReturn(targetUser);
+        when(targetUser.getId()).thenReturn("123456789"); // the owner
+
+        command.execute(slashEvent);
+
+        when(targetUser.getId()).thenReturn("5555");
+        when(staticPermissionRepository.existsByUserIdAndPermission("5555", "admin")).thenReturn(true);
+
+        command.execute(slashEvent);
+
+        verify(blocklistService, never()).blockUser(anyString(), any());
+        verify(slashEvent, times(2)).reply(contains("can't be blocked"));
+    }
+
+    @Test
+    void testCannotBlockHomeServer() {
+        when(slashEvent.getSubcommandName()).thenReturn("server");
+        when(slashEvent.getOption(eq("action"), any())).thenReturn("block");
+        when(slashEvent.getOption(eq("server_id"), any())).thenReturn("home-guild");
+
+        command.execute(slashEvent);
+
+        verify(blocklistService, never()).blockServer(anyString(), any(), any(), any());
+        verify(slashEvent).reply(contains("home server can't be blocked"));
     }
 
     @Test

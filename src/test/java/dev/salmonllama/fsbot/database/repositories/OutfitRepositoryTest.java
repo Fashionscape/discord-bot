@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Instant;
 import java.util.List;
@@ -34,7 +35,9 @@ class OutfitRepositoryTest {
                 false,
                 true,
                 5,
-                "del-hash-1"
+                "del-hash-1",
+                "server-1",
+                "channel-1"
         );
 
         OutfitEntity outfit2 = new OutfitEntity(
@@ -49,7 +52,9 @@ class OutfitRepositoryTest {
                 false,
                 false,
                 2,
-                "del-hash-2"
+                "del-hash-2",
+                "server-1",
+                "channel-1"
         );
 
         OutfitEntity deletedOutfit = new OutfitEntity(
@@ -64,7 +69,9 @@ class OutfitRepositoryTest {
                 true,
                 false,
                 0,
-                null
+                null,
+                "server-1",
+                "channel-1"
         );
 
         outfitRepository.saveAll(List.of(outfit1, outfit2, deletedOutfit));
@@ -110,5 +117,37 @@ class OutfitRepositoryTest {
     @Test
     void testCountByDeletedFalse() {
         assertEquals(2, outfitRepository.countByDeletedFalse());
+    }
+
+    @Test
+    void testOutfitRequiresServerAndChannelIds() {
+        assertThrows(NullPointerException.class, () -> new OutfitEntity(
+                "no-server", "https://example.com/x.png", "user-1", "osrs", null, "Name",
+                Instant.now(), Instant.now(), false, false, 0, null, null, "channel-1"));
+        assertThrows(NullPointerException.class, () -> new OutfitEntity(
+                "no-channel", "https://example.com/x.png", "user-1", "osrs", null, "Name",
+                Instant.now(), Instant.now(), false, false, 0, null, "server-1", null));
+    }
+
+    @Test
+    void testDatabaseRejectsOutfitWithoutServerId() {
+        OutfitEntity outfit = new OutfitEntity();
+        outfit.setId("orphan");
+        outfit.setLink("https://example.com/orphan.png");
+        outfit.setSubmitter("user-1");
+        outfit.setChannelId("channel-1");
+
+        assertThrows(DataIntegrityViolationException.class, () -> outfitRepository.saveAndFlush(outfit));
+    }
+
+    @Test
+    void testDatabaseRejectsOutfitWithoutChannelId() {
+        OutfitEntity outfit = new OutfitEntity();
+        outfit.setId("orphan");
+        outfit.setLink("https://example.com/orphan.png");
+        outfit.setSubmitter("user-1");
+        outfit.setServerId("server-1");
+
+        assertThrows(DataIntegrityViolationException.class, () -> outfitRepository.saveAndFlush(outfit));
     }
 }

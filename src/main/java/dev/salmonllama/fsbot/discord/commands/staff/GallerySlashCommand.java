@@ -1,10 +1,9 @@
 package dev.salmonllama.fsbot.discord.commands.staff;
 
-import dev.salmonllama.fsbot.config.BotProperties;
 import dev.salmonllama.fsbot.database.entities.GalleryChannelEntity;
 import dev.salmonllama.fsbot.database.repositories.GalleryChannelRepository;
-import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
 import dev.salmonllama.fsbot.discord.commands.SlashCommand;
+import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
@@ -33,17 +32,11 @@ public class GallerySlashCommand implements SlashCommand {
     private static final Color EMBED_COLOR = new Color(0x3B88C3);
 
     private final GalleryChannelRepository galleryChannelRepository;
-    private final BotProperties properties;
-    private final StaticPermissionRepository staticPermissionRepository;
+    private final PermissionService permissionService;
 
-    public GallerySlashCommand(
-            GalleryChannelRepository galleryChannelRepository,
-            BotProperties properties,
-            StaticPermissionRepository staticPermissionRepository
-    ) {
+    public GallerySlashCommand(GalleryChannelRepository galleryChannelRepository, PermissionService permissionService) {
         this.galleryChannelRepository = galleryChannelRepository;
-        this.properties = properties;
-        this.staticPermissionRepository = staticPermissionRepository;
+        this.permissionService = permissionService;
     }
 
     @Override
@@ -154,7 +147,7 @@ public class GallerySlashCommand implements SlashCommand {
         entity.setEnabled(true);
 
         galleryChannelRepository.save(entity);
-        logger.info("Configured gallery channel {} in guild {}", channelId, guild.getId());
+        logger.info("Staff action: configured gallery channel {} (actor={}, guild={})", channelId, event.getUser().getId(), guild.getId());
 
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Gallery Channel Registered")
@@ -184,7 +177,7 @@ public class GallerySlashCommand implements SlashCommand {
         GalleryChannelEntity entity = existing.get();
         entity.setEnabled(false);
         galleryChannelRepository.save(entity);
-        logger.info("Disabled gallery channel {} in guild {}", channelId, guild.getId());
+        logger.info("Staff action: disabled gallery channel {} (actor={}, guild={})", channelId, event.getUser().getId(), guild.getId());
 
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Gallery Channel Removed")
@@ -195,19 +188,9 @@ public class GallerySlashCommand implements SlashCommand {
     }
 
     private boolean hasManagePermission(String userId, Member member) {
-        if (properties.discord() != null && properties.discord().ownerId() > 0) {
-            if (String.valueOf(properties.discord().ownerId()).equals(userId)) {
-                return true;
-            }
+        if (member != null && (member.hasPermission(Permission.ADMINISTRATOR) || member.hasPermission(Permission.MANAGE_SERVER))) {
+            return true;
         }
-
-        if (member != null) {
-            if (member.hasPermission(Permission.ADMINISTRATOR) || member.hasPermission(Permission.MANAGE_SERVER)) {
-                return true;
-            }
-        }
-
-        return staticPermissionRepository.existsByUserIdAndPermission(userId, "admin") ||
-               staticPermissionRepository.existsByUserIdAndPermission(userId, "staff");
+        return permissionService.isBotStaff(userId);
     }
 }

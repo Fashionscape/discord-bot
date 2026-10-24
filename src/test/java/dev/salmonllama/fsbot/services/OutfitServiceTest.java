@@ -45,7 +45,9 @@ class OutfitServiceTest {
                 false,
                 false,
                 5,
-                null
+                null,
+                "server-1",
+                "channel-1"
         );
     }
 

@@ -66,7 +66,7 @@ class SlashCommandDispatcherTest {
         lenient().when(mockCommand.buildCommandData()).thenReturn(Commands.slash("testcmd", "A test command"));
 
         properties = new BotProperties(
-                new BotProperties.DiscordProperties("test-token", 123456789L, ""),
+                new BotProperties.DiscordProperties("test-token", 123456789L, "", ""),
                 new BotProperties.MinioProperties("http://localhost:9000", "key", "secret", "bucket", "https://cdn.example.com")
         );
 
@@ -156,11 +156,47 @@ class SlashCommandDispatcherTest {
     @Test
     void testButtonDispatching() {
         when(buttonEvent.getComponentId()).thenReturn("gallery:upvote:outfit1");
+        when(buttonEvent.getUser()).thenReturn(mockUser);
+        when(mockUser.getId()).thenReturn("user-1");
         when(mockButtonHandler.canHandle("gallery:upvote:outfit1")).thenReturn(true);
 
         dispatcher.onButtonInteraction(buttonEvent);
 
         verify(mockButtonHandler).handle(buttonEvent);
+    }
+
+    @Test
+    void testBlockedUserButtonRefused() {
+        when(buttonEvent.getComponentId()).thenReturn("gallery:delete:outfit1");
+        when(buttonEvent.getUser()).thenReturn(mockUser);
+        when(mockUser.getId()).thenReturn("blocked-user");
+        when(buttonEvent.getGuild()).thenReturn(mockGuild);
+        when(mockGuild.getId()).thenReturn("guild-1");
+        when(blocklistService.isBlocked("blocked-user", "guild-1")).thenReturn(true);
+        when(buttonEvent.reply(anyString())).thenReturn(replyCallbackAction);
+        when(replyCallbackAction.setEphemeral(true)).thenReturn(replyCallbackAction);
+
+        dispatcher.onButtonInteraction(buttonEvent);
+
+        verify(buttonEvent).reply(contains("blocked"));
+        verify(mockButtonHandler, never()).handle(any());
+    }
+
+    @Test
+    void testHomeGuildOnlyCommandRefusedElsewhere() {
+        when(slashEvent.getUser()).thenReturn(mockUser);
+        when(mockUser.getId()).thenReturn("user-1");
+        when(slashEvent.getGuild()).thenReturn(mockGuild);
+        when(mockGuild.getId()).thenReturn("guild-1");
+        when(slashEvent.getName()).thenReturn("testcmd");
+        when(mockCommand.isHomeGuildOnly()).thenReturn(true);
+        when(slashEvent.reply(anyString())).thenReturn(replyCallbackAction);
+        when(replyCallbackAction.setEphemeral(true)).thenReturn(replyCallbackAction);
+
+        dispatcher.onSlashCommandInteraction(slashEvent);
+
+        verify(slashEvent).reply(contains("home server"));
+        verify(mockCommand, never()).execute(any());
     }
 
     @Test

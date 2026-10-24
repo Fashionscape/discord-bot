@@ -1,14 +1,12 @@
 package dev.salmonllama.fsbot.discord.commands.staff;
 
-import dev.salmonllama.fsbot.config.BotProperties;
 import dev.salmonllama.fsbot.database.entities.BlockedServerEntity;
 import dev.salmonllama.fsbot.database.entities.BlockedUserEntity;
-import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
 import dev.salmonllama.fsbot.discord.commands.SlashCommand;
 import dev.salmonllama.fsbot.services.BlocklistService;
+import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.Permission;
-import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions;
@@ -33,17 +31,11 @@ public class BlockSlashCommand implements SlashCommand {
     private static final Color EMBED_COLOR = new Color(0xED4245);
 
     private final BlocklistService blocklistService;
-    private final BotProperties properties;
-    private final StaticPermissionRepository staticPermissionRepository;
+    private final PermissionService permissionService;
 
-    public BlockSlashCommand(
-            BlocklistService blocklistService,
-            BotProperties properties,
-            StaticPermissionRepository staticPermissionRepository
-    ) {
+    public BlockSlashCommand(BlocklistService blocklistService, PermissionService permissionService) {
         this.blocklistService = blocklistService;
-        this.properties = properties;
-        this.staticPermissionRepository = staticPermissionRepository;
+        this.permissionService = permissionService;
     }
 
     @Override
@@ -54,6 +46,11 @@ public class BlockSlashCommand implements SlashCommand {
     @Override
     public String getDescription() {
         return "Manage user and server blocklists (Staff only)";
+    }
+
+    @Override
+    public boolean isHomeGuildOnly() {
+        return true;
     }
 
     @Override
@@ -93,9 +90,8 @@ public class BlockSlashCommand implements SlashCommand {
     @Override
     public void execute(SlashCommandInteractionEvent event) {
         String userId = event.getUser().getId();
-        Member member = event.getMember();
 
-        if (!isAdmin(userId, member)) {
+        if (!permissionService.isBotAdmin(userId)) {
             event.reply("You do not have permission to manage the blocklist.")
                     .setEphemeral(true)
                     .queue();
@@ -132,6 +128,13 @@ public class BlockSlashCommand implements SlashCommand {
 
         switch (action.toLowerCase()) {
             case "block" -> {
+                if (isProtectedUser(event, targetId)) {
+                    event.reply("The bot owner, bot admins, and the bot itself can't be blocked.")
+                            .setEphemeral(true)
+                            .queue();
+                    return;
+                }
+
                 if (blocklistService.isUserBlocked(targetId)) {
                     event.reply("User " + targetUser.getAsMention() + " (`" + targetId + "`) is already blocked.")
                             .setEphemeral(true)
@@ -139,7 +142,8 @@ public class BlockSlashCommand implements SlashCommand {
                     return;
                 }
 
-                BlockedUserEntity blocked = blocklistService.blockUser(targetId, reason);
+                blocklistService.blockUser(targetId, reason);
+                logPrivilegedAction(event, "blocked user " + targetId);
                 EmbedBuilder embed = new EmbedBuilder()
                         .setTitle("User Blocked")
                         .setColor(EMBED_COLOR)
@@ -159,6 +163,7 @@ public class BlockSlashCommand implements SlashCommand {
                 }
 
                 blocklistService.unblockUser(targetId);
+                logPrivilegedAction(event, "unblocked user " + targetId);
                 EmbedBuilder embed = new EmbedBuilder()
                         .setTitle("User Unblocked")
                         .setColor(Color.GREEN)
@@ -203,6 +208,13 @@ public class BlockSlashCommand implements SlashCommand {
 
         switch (action.toLowerCase()) {
             case "block" -> {
+                if (permissionService.isHomeGuild(serverId)) {
+                    event.reply("The home server can't be blocked.")
+                            .setEphemeral(true)
+                            .queue();
+                    return;
+                }
+
                 if (blocklistService.isServerBlocked(serverId)) {
                     event.reply("Server `" + serverId + "` is already blocked.")
                             .setEphemeral(true)
@@ -210,7 +222,8 @@ public class BlockSlashCommand implements SlashCommand {
                     return;
                 }
 
-                BlockedServerEntity blocked = blocklistService.blockServer(serverId, null, null, reason);
+                blocklistService.blockServer(serverId, null, null, reason);
+                logPrivilegedAction(event, "blocked server " + serverId);
                 EmbedBuilder embed = new EmbedBuilder()
                         .setTitle("Server Blocked")
                         .setColor(EMBED_COLOR)
@@ -229,6 +242,7 @@ public class BlockSlashCommand implements SlashCommand {
                 }
 
                 blocklistService.unblockServer(serverId);
+                logPrivilegedAction(event, "unblocked server " + serverId);
                 EmbedBuilder embed = new EmbedBuilder()
                         .setTitle("Server Unblocked")
                         .setColor(Color.GREEN)
@@ -311,17 +325,15 @@ public class BlockSlashCommand implements SlashCommand {
         }
     }
 
-    private boolean isAdmin(String userId, Member member) {
-        if (properties.discord() != null && properties.discord().ownerId() > 0) {
-            if (String.valueOf(properties.discord().ownerId()).equals(userId)) {
-                return true;
-            }
-        }
-
-        if (member != null && member.hasPermission(Permission.ADMINISTRATOR)) {
+    private boolean isProtectedUser(SlashCommandInteractionEvent event, String targetId) {
+        if (permissionService.isBotAdmin(targetId)) {
             return true;
         }
+        return event.getJDA() != null && targetId.equals(event.getJDA().getSelfUser().getId());
+    }
 
-        return staticPermissionRepository.existsByUserIdAndPermission(userId, "admin");
+    private void logPrivilegedAction(SlashCommandInteractionEvent event, String action) {
+        String guildId = event.getGuild() != null ? event.getGuild().getId() : null;
+        logger.info("Staff action: {} (actor={}, guild={})", action, event.getUser().getId(), guildId);
     }
 }

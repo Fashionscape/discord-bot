@@ -1,13 +1,11 @@
 package dev.salmonllama.fsbot.discord.commands.general;
 
-import dev.salmonllama.fsbot.config.BotProperties;
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
-import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
 import dev.salmonllama.fsbot.discord.commands.SlashCommand;
 import dev.salmonllama.fsbot.discord.components.ButtonHandler;
 import dev.salmonllama.fsbot.services.OutfitService;
+import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.EmbedBuilder;
-import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
@@ -40,17 +38,11 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
     private static final Color EMBED_COLOR = new Color(0x3B88C3);
 
     private final OutfitService outfitService;
-    private final BotProperties properties;
-    private final StaticPermissionRepository staticPermissionRepository;
+    private final PermissionService permissionService;
 
-    public OutfitSlashCommand(
-            OutfitService outfitService,
-            BotProperties properties,
-            StaticPermissionRepository staticPermissionRepository
-    ) {
+    public OutfitSlashCommand(OutfitService outfitService, PermissionService permissionService) {
         this.outfitService = outfitService;
-        this.properties = properties;
-        this.staticPermissionRepository = staticPermissionRepository;
+        this.permissionService = permissionService;
     }
 
     @Override
@@ -217,14 +209,15 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         String userId = event.getUser().getId();
         Member member = event.getMember();
 
-        if (!canDeleteOutfit(userId, member, outfit)) {
-            event.reply("You do not have permission to delete this outfit. Only the submitter or staff can delete it.")
+        if (!permissionService.canModerateOutfit(userId, member, outfit)) {
+            event.reply("You do not have permission to delete this outfit. Only the submitter, bot staff, or moderators of the server it was submitted in can delete it.")
                     .setEphemeral(true)
                     .queue();
             return;
         }
 
         outfitService.delete(id);
+        logPrivilegedAction(event, "deleted outfit " + id);
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Outfit Deleted")
                 .setDescription("Outfit `" + id + "` has been marked as deleted.")
@@ -242,9 +235,8 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         }
 
         String userId = event.getUser().getId();
-        Member member = event.getMember();
 
-        if (!isStaff(userId, member)) {
+        if (!permissionService.isBotStaff(userId)) {
             event.reply("You must be a staff member to restore outfits.").setEphemeral(true).queue();
             return;
         }
@@ -262,6 +254,7 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         }
 
         outfitService.restore(id);
+        logPrivilegedAction(event, "restored outfit " + id);
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Outfit Restored")
                 .setDescription("Outfit `" + id + "` has been restored and is now active.")
@@ -271,30 +264,9 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         event.replyEmbeds(embed.build()).queue();
     }
 
-    private boolean canDeleteOutfit(String userId, Member member, OutfitEntity outfit) {
-        if (userId.equals(outfit.getSubmitter())) {
-            return true;
-        }
-        return isStaff(userId, member);
-    }
-
-    private boolean isStaff(String userId, Member member) {
-        if (properties.discord() != null && properties.discord().ownerId() > 0) {
-            if (String.valueOf(properties.discord().ownerId()).equals(userId)) {
-                return true;
-            }
-        }
-
-        if (member != null) {
-            if (member.hasPermission(Permission.ADMINISTRATOR) ||
-                member.hasPermission(Permission.MANAGE_SERVER) ||
-                member.hasPermission(Permission.MESSAGE_MANAGE)) {
-                return true;
-            }
-        }
-
-        return staticPermissionRepository.existsByUserIdAndPermission(userId, "admin") ||
-               staticPermissionRepository.existsByUserIdAndPermission(userId, "staff");
+    private void logPrivilegedAction(SlashCommandInteractionEvent event, String action) {
+        String guildId = event.getGuild() != null ? event.getGuild().getId() : null;
+        logger.info("Outfit action: {} (actor={}, guild={})", action, event.getUser().getId(), guildId);
     }
 
     private EmbedBuilder buildOutfitEmbed(OutfitEntity outfit) {

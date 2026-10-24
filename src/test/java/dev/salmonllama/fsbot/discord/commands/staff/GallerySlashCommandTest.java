@@ -4,6 +4,7 @@ import dev.salmonllama.fsbot.config.BotProperties;
 import dev.salmonllama.fsbot.database.entities.GalleryChannelEntity;
 import dev.salmonllama.fsbot.database.repositories.GalleryChannelRepository;
 import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
+import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
@@ -64,10 +65,10 @@ class GallerySlashCommandTest {
     @BeforeEach
     void setUp() {
         properties = new BotProperties(
-                new BotProperties.DiscordProperties("token", 123456789L, "dev-guild"),
+                new BotProperties.DiscordProperties("token", 123456789L, "dev-guild", ""),
                 new BotProperties.MinioProperties("http://localhost:9000", "access", "secret", "bucket", "https://media.fashionscape.org")
         );
-        command = new GallerySlashCommand(galleryChannelRepository, properties, staticPermissionRepository);
+        command = new GallerySlashCommand(galleryChannelRepository, new PermissionService(staticPermissionRepository, properties));
 
         when(slashEvent.getGuild()).thenReturn(mockGuild);
         when(mockGuild.getId()).thenReturn("guild-1");

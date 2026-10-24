@@ -95,7 +95,8 @@ class SqliteToPostgresMigrationServiceTest {
     void testFullMigration() throws SQLException {
         SqliteToPostgresMigrationService.MigrationReport report = migrationService.migrate(tempSqliteDb);
 
-        assertEquals(1, report.outfitsMigrated);
+        assertEquals(0, report.outfitsMigrated);
+        assertEquals(1, report.outfitsSkipped);
         assertEquals(1, report.galleriesMigrated);
         assertEquals(1, report.serverConfigsMigrated);
         assertEquals(1, report.blockedUsersMigrated);
@@ -104,14 +105,8 @@ class SqliteToPostgresMigrationServiceTest {
         assertEquals(1, report.colorRolesMigrated);
         assertTrue(report.errors.isEmpty(), "Expected zero migration errors");
 
-        // Verify entities in JPA repositories
-        Optional<OutfitEntity> outfit = outfitRepository.findById("legacy-1");
-        assertTrue(outfit.isPresent());
-        assertEquals("https://i.imgur.com/sample1.png", outfit.get().getLink());
-        assertEquals("sub-1", outfit.get().getSubmitter());
-        assertTrue(outfit.get().isFeatured());
-        assertFalse(outfit.get().isDeleted());
-        assertEquals(10, outfit.get().getDisplayCount());
+        // Legacy outfits have no server or channel ID, so they are skipped
+        assertTrue(outfitRepository.findById("legacy-1").isEmpty());
 
         Optional<GalleryChannelEntity> gallery = galleryChannelRepository.findById("chan-1");
         assertTrue(gallery.isPresent());
