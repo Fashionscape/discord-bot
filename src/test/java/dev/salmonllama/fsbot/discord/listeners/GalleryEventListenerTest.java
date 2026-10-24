@@ -7,6 +7,7 @@ import dev.salmonllama.fsbot.database.repositories.GalleryChannelRepository;
 import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
 import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
 import dev.salmonllama.fsbot.services.BlocklistService;
+import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import dev.salmonllama.fsbot.storage.MinioStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
@@ -35,6 +36,7 @@ import java.util.function.Consumer;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,6 +56,9 @@ class GalleryEventListenerTest {
 
     @Mock
     private StaticPermissionRepository staticPermissionRepository;
+
+    @Mock
+    private AuditService auditService;
 
     @Mock
     private MessageReceivedEvent messageEvent;
@@ -101,7 +106,8 @@ class GalleryEventListenerTest {
                 outfitRepository,
                 minioStorageService,
                 blocklistService,
-                new PermissionService(staticPermissionRepository, properties)
+                new PermissionService(staticPermissionRepository, properties),
+                auditService
         );
     }
 
@@ -218,6 +224,8 @@ class GalleryEventListenerTest {
         assertEquals("https://media.fashionscape.org/outfits/id.png", savedOutfit.getLink());
         assertEquals("srv-1", savedOutfit.getServerId());
         assertEquals("chan-gallery", savedOutfit.getChannelId());
+        verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_ADDED), eq("user-1"), eq("srv-1"),
+                eq(AuditService.TARGET_OUTFIT), eq(savedOutfit.getId()), any());
         verify(messageCreateAction).queue(any(), any());
     }
 
@@ -288,6 +296,8 @@ class GalleryEventListenerTest {
         assertTrue(outfit.isDeleted());
         verify(outfitRepository).save(outfit);
         verify(webhookAction).queue();
+        verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_DELETED), eq("user-submitter"), any(),
+                eq(AuditService.TARGET_OUTFIT), eq("outfit-99"), eq("Deleted by its submitter"));
     }
 
     @Test
@@ -315,6 +325,7 @@ class GalleryEventListenerTest {
         assertFalse(outfit.isDeleted());
         verify(outfitRepository, never()).save(any());
         verify(buttonEvent).reply(contains("do not have permission"));
+        verifyNoInteractions(auditService);
     }
 
     @Test
@@ -383,5 +394,7 @@ class GalleryEventListenerTest {
 
         assertTrue(outfit.isDeleted());
         verify(outfitRepository).save(outfit);
+        verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_DELETED), eq("home-mod"), any(),
+                eq(AuditService.TARGET_OUTFIT), eq("outfit-99"), contains("Deleted by staff"));
     }
 }

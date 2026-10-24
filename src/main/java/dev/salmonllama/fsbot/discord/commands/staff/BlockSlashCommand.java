@@ -3,6 +3,7 @@ package dev.salmonllama.fsbot.discord.commands.staff;
 import dev.salmonllama.fsbot.database.entities.BlockedServerEntity;
 import dev.salmonllama.fsbot.database.entities.BlockedUserEntity;
 import dev.salmonllama.fsbot.discord.commands.SlashCommand;
+import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.BlocklistService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.EmbedBuilder;
@@ -32,10 +33,12 @@ public class BlockSlashCommand implements SlashCommand {
 
     private final BlocklistService blocklistService;
     private final PermissionService permissionService;
+    private final AuditService auditService;
 
-    public BlockSlashCommand(BlocklistService blocklistService, PermissionService permissionService) {
+    public BlockSlashCommand(BlocklistService blocklistService, PermissionService permissionService, AuditService auditService) {
         this.blocklistService = blocklistService;
         this.permissionService = permissionService;
+        this.auditService = auditService;
     }
 
     @Override
@@ -143,7 +146,7 @@ public class BlockSlashCommand implements SlashCommand {
                 }
 
                 blocklistService.blockUser(targetId, reason);
-                logPrivilegedAction(event, "blocked user " + targetId);
+                audit(event, AuditService.Action.USER_BLOCKED, AuditService.TARGET_USER, targetId, "Reason: " + reason);
                 EmbedBuilder embed = new EmbedBuilder()
                         .setTitle("User Blocked")
                         .setColor(EMBED_COLOR)
@@ -163,7 +166,7 @@ public class BlockSlashCommand implements SlashCommand {
                 }
 
                 blocklistService.unblockUser(targetId);
-                logPrivilegedAction(event, "unblocked user " + targetId);
+                audit(event, AuditService.Action.USER_UNBLOCKED, AuditService.TARGET_USER, targetId, null);
                 EmbedBuilder embed = new EmbedBuilder()
                         .setTitle("User Unblocked")
                         .setColor(Color.GREEN)
@@ -173,6 +176,7 @@ public class BlockSlashCommand implements SlashCommand {
                 event.replyEmbeds(embed.build()).queue();
             }
             case "check" -> {
+                audit(event, AuditService.Action.USER_BLOCK_CHECKED, AuditService.TARGET_USER, targetId, null);
                 Optional<BlockedUserEntity> entityOpt = blocklistService.getBlockedUser(targetId);
                 if (entityOpt.isEmpty()) {
                     event.reply("User " + targetUser.getAsMention() + " (`" + targetId + "`) is **not** blocked.")
@@ -223,7 +227,7 @@ public class BlockSlashCommand implements SlashCommand {
                 }
 
                 blocklistService.blockServer(serverId, null, null, reason);
-                logPrivilegedAction(event, "blocked server " + serverId);
+                audit(event, AuditService.Action.SERVER_BLOCKED, AuditService.TARGET_SERVER, serverId, "Reason: " + reason);
                 EmbedBuilder embed = new EmbedBuilder()
                         .setTitle("Server Blocked")
                         .setColor(EMBED_COLOR)
@@ -242,7 +246,7 @@ public class BlockSlashCommand implements SlashCommand {
                 }
 
                 blocklistService.unblockServer(serverId);
-                logPrivilegedAction(event, "unblocked server " + serverId);
+                audit(event, AuditService.Action.SERVER_UNBLOCKED, AuditService.TARGET_SERVER, serverId, null);
                 EmbedBuilder embed = new EmbedBuilder()
                         .setTitle("Server Unblocked")
                         .setColor(Color.GREEN)
@@ -252,6 +256,7 @@ public class BlockSlashCommand implements SlashCommand {
                 event.replyEmbeds(embed.build()).queue();
             }
             case "check" -> {
+                audit(event, AuditService.Action.SERVER_BLOCK_CHECKED, AuditService.TARGET_SERVER, serverId, null);
                 Optional<BlockedServerEntity> entityOpt = blocklistService.getBlockedServer(serverId);
                 if (entityOpt.isEmpty()) {
                     event.reply("Server `" + serverId + "` is **not** blocked.")
@@ -277,6 +282,7 @@ public class BlockSlashCommand implements SlashCommand {
 
     private void handleList(SlashCommandInteractionEvent event) {
         String type = event.getOption("type", OptionMapping::getAsString);
+        audit(event, AuditService.Action.BLOCKLIST_VIEWED, null, null, "Viewed blocked " + ("servers".equalsIgnoreCase(type) ? "servers" : "users"));
         if ("servers".equalsIgnoreCase(type)) {
             List<BlockedServerEntity> servers = blocklistService.getAllBlockedServers();
             EmbedBuilder embed = new EmbedBuilder()
@@ -332,8 +338,8 @@ public class BlockSlashCommand implements SlashCommand {
         return event.getJDA() != null && targetId.equals(event.getJDA().getSelfUser().getId());
     }
 
-    private void logPrivilegedAction(SlashCommandInteractionEvent event, String action) {
+    private void audit(SlashCommandInteractionEvent event, AuditService.Action action, String targetType, String targetId, String details) {
         String guildId = event.getGuild() != null ? event.getGuild().getId() : null;
-        logger.info("Staff action: {} (actor={}, guild={})", action, event.getUser().getId(), guildId);
+        auditService.record(event.getJDA(), action, event.getUser().getId(), guildId, targetType, targetId, details);
     }
 }

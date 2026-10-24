@@ -3,6 +3,7 @@ package dev.salmonllama.fsbot.discord.commands.staff;
 import dev.salmonllama.fsbot.config.BotProperties;
 import dev.salmonllama.fsbot.database.entities.StaticPermissionEntity;
 import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
+import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.User;
@@ -34,6 +35,9 @@ class PermissionsSlashCommandTest {
     private StaticPermissionRepository staticPermissionRepository;
 
     @Mock
+    private AuditService auditService;
+
+    @Mock
     private SlashCommandInteractionEvent slashEvent;
 
     @Mock
@@ -53,7 +57,7 @@ class PermissionsSlashCommandTest {
                 new BotProperties.DiscordProperties("token", 123456789L, "", "home-guild"),
                 new BotProperties.MinioProperties("http://localhost:9000", "access", "secret", "bucket", "https://media.fashionscape.org")
         );
-        command = new PermissionsSlashCommand(new PermissionService(staticPermissionRepository, properties));
+        command = new PermissionsSlashCommand(new PermissionService(staticPermissionRepository, properties), auditService);
 
         when(slashEvent.getUser()).thenReturn(mockUser);
         when(mockUser.getId()).thenReturn("123456789"); // bot owner
@@ -86,6 +90,7 @@ class PermissionsSlashCommandTest {
 
         verify(slashEvent).reply(contains("Only the bot owner"));
         verify(staticPermissionRepository, never()).save(any());
+        verifyNoInteractions(auditService);
     }
 
     @Test
@@ -101,6 +106,8 @@ class PermissionsSlashCommandTest {
         assertEquals("4001", captor.getValue().getUserId());
         assertEquals("staff", captor.getValue().getPermission());
         verify(slashEvent).reply(contains("Granted `staff`"));
+        verify(auditService).record(any(), eq(AuditService.Action.PERMISSION_GRANTED), eq("123456789"), any(),
+                eq(AuditService.TARGET_USER), eq("4001"), any());
     }
 
     @Test
@@ -127,6 +134,8 @@ class PermissionsSlashCommandTest {
 
         verify(staticPermissionRepository).deleteByUserIdAndPermission("4001", "admin");
         verify(slashEvent).reply(contains("Revoked `admin`"));
+        verify(auditService).record(any(), eq(AuditService.Action.PERMISSION_REVOKED), eq("123456789"), any(),
+                eq(AuditService.TARGET_USER), eq("4001"), any());
     }
 
     @Test
@@ -137,6 +146,7 @@ class PermissionsSlashCommandTest {
         command.execute(slashEvent);
 
         verify(slashEvent).reply(contains("No bot permissions are set"));
+        verify(auditService).record(any(), eq(AuditService.Action.PERMISSIONS_VIEWED), eq("123456789"), any(), any(), any(), any());
     }
 
     @Test

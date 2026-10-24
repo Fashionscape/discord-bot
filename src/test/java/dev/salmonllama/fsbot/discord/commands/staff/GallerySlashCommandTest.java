@@ -4,6 +4,7 @@ import dev.salmonllama.fsbot.config.BotProperties;
 import dev.salmonllama.fsbot.database.entities.GalleryChannelEntity;
 import dev.salmonllama.fsbot.database.repositories.GalleryChannelRepository;
 import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
+import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
@@ -42,6 +43,9 @@ class GallerySlashCommandTest {
     private StaticPermissionRepository staticPermissionRepository;
 
     @Mock
+    private AuditService auditService;
+
+    @Mock
     private SlashCommandInteractionEvent slashEvent;
 
     @Mock
@@ -68,7 +72,7 @@ class GallerySlashCommandTest {
                 new BotProperties.DiscordProperties("token", 123456789L, "dev-guild", ""),
                 new BotProperties.MinioProperties("http://localhost:9000", "access", "secret", "bucket", "https://media.fashionscape.org")
         );
-        command = new GallerySlashCommand(galleryChannelRepository, new PermissionService(staticPermissionRepository, properties));
+        command = new GallerySlashCommand(galleryChannelRepository, new PermissionService(staticPermissionRepository, properties), auditService);
 
         when(slashEvent.getGuild()).thenReturn(mockGuild);
         when(mockGuild.getId()).thenReturn("guild-1");
@@ -121,6 +125,8 @@ class GallerySlashCommandTest {
 
         verify(galleryChannelRepository).save(any(GalleryChannelEntity.class));
         verify(slashEvent).replyEmbeds(any(MessageEmbed.class));
+        verify(auditService).record(any(), eq(AuditService.Action.GALLERY_ADDED), eq("123456789"), eq("guild-1"),
+                eq(AuditService.TARGET_CHANNEL), eq("new-chan"), any());
     }
 
     @Test
@@ -137,5 +143,7 @@ class GallerySlashCommandTest {
         assertFalse(existing.isEnabled());
         verify(galleryChannelRepository).save(existing);
         verify(slashEvent).replyEmbeds(any(MessageEmbed.class));
+        verify(auditService).record(any(), eq(AuditService.Action.GALLERY_REMOVED), eq("123456789"), eq("guild-1"),
+                eq(AuditService.TARGET_CHANNEL), eq("old-chan"), any());
     }
 }

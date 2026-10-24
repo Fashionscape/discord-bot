@@ -3,6 +3,7 @@ package dev.salmonllama.fsbot.discord.commands.general;
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.discord.commands.SlashCommand;
 import dev.salmonllama.fsbot.discord.components.ButtonHandler;
+import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.OutfitService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.EmbedBuilder;
@@ -39,10 +40,12 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
 
     private final OutfitService outfitService;
     private final PermissionService permissionService;
+    private final AuditService auditService;
 
-    public OutfitSlashCommand(OutfitService outfitService, PermissionService permissionService) {
+    public OutfitSlashCommand(OutfitService outfitService, PermissionService permissionService, AuditService auditService) {
         this.outfitService = outfitService;
         this.permissionService = permissionService;
+        this.auditService = auditService;
     }
 
     @Override
@@ -217,7 +220,8 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         }
 
         outfitService.delete(id);
-        logPrivilegedAction(event, "deleted outfit " + id);
+        audit(event, AuditService.Action.OUTFIT_DELETED, id,
+                userId.equals(outfit.getSubmitter()) ? "Deleted by its submitter" : "Deleted by staff (submitter <@" + outfit.getSubmitter() + ">)");
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Outfit Deleted")
                 .setDescription("Outfit `" + id + "` has been marked as deleted.")
@@ -254,7 +258,7 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         }
 
         outfitService.restore(id);
-        logPrivilegedAction(event, "restored outfit " + id);
+        audit(event, AuditService.Action.OUTFIT_RESTORED, id, null);
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Outfit Restored")
                 .setDescription("Outfit `" + id + "` has been restored and is now active.")
@@ -264,9 +268,9 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         event.replyEmbeds(embed.build()).queue();
     }
 
-    private void logPrivilegedAction(SlashCommandInteractionEvent event, String action) {
+    private void audit(SlashCommandInteractionEvent event, AuditService.Action action, String outfitId, String details) {
         String guildId = event.getGuild() != null ? event.getGuild().getId() : null;
-        logger.info("Outfit action: {} (actor={}, guild={})", action, event.getUser().getId(), guildId);
+        auditService.record(event.getJDA(), action, event.getUser().getId(), guildId, AuditService.TARGET_OUTFIT, outfitId, details);
     }
 
     private EmbedBuilder buildOutfitEmbed(OutfitEntity outfit) {
