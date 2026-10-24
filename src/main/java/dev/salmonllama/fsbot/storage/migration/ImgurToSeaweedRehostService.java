@@ -2,7 +2,7 @@ package dev.salmonllama.fsbot.storage.migration;
 
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
-import dev.salmonllama.fsbot.storage.MinioStorageService;
+import dev.salmonllama.fsbot.storage.SeaweedStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,34 +19,34 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
-public class ImgurToMinioRehostService {
+public class ImgurToSeaweedRehostService {
 
-    private static final Logger logger = LoggerFactory.getLogger(ImgurToMinioRehostService.class);
+    private static final Logger logger = LoggerFactory.getLogger(ImgurToSeaweedRehostService.class);
 
     private final OutfitRepository outfitRepository;
-    private final MinioStorageService minioStorageService;
+    private final SeaweedStorageService storageService;
     private final HttpClient httpClient;
 
     @org.springframework.beans.factory.annotation.Autowired
-    public ImgurToMinioRehostService(OutfitRepository outfitRepository, MinioStorageService minioStorageService) {
-        this(outfitRepository, minioStorageService, HttpClient.newBuilder()
+    public ImgurToSeaweedRehostService(OutfitRepository outfitRepository, SeaweedStorageService storageService) {
+        this(outfitRepository, storageService, HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(15))
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build());
     }
 
-    public ImgurToMinioRehostService(
+    public ImgurToSeaweedRehostService(
             OutfitRepository outfitRepository,
-            MinioStorageService minioStorageService,
+            SeaweedStorageService storageService,
             HttpClient httpClient
     ) {
         this.outfitRepository = outfitRepository;
-        this.minioStorageService = minioStorageService;
+        this.storageService = storageService;
         this.httpClient = httpClient;
     }
 
     public RehostReport rehostAll(boolean dryRun, int limit, long delayMillis) {
-        logger.info("Starting Imgur to MinIO rehosting (dryRun={}, limit={}, delayMillis={})", dryRun, limit, delayMillis);
+        logger.info("Starting Imgur to SeaweedFS rehosting (dryRun={}, limit={}, delayMillis={})", dryRun, limit, delayMillis);
 
         List<OutfitEntity> outfits = outfitRepository.findByLinkContaining("imgur.com");
         int totalFound = outfits.size();
@@ -113,10 +113,10 @@ public class ImgurToMinioRehostService {
                 }
 
                 String contentType = response.headers().firstValue("Content-Type").orElse("image/png");
-                String ext = minioStorageService.resolveExtension(contentType, sourceUrl);
-                String objectName = minioStorageService.buildOutfitObjectName(outfitId, ext);
+                String ext = storageService.resolveExtension(contentType, sourceUrl);
+                String objectName = storageService.buildOutfitObjectName(outfitId, ext);
 
-                UploadResult uploadResult = minioStorageService.upload(objectName, imageBytes, contentType);
+                UploadResult uploadResult = storageService.upload(objectName, imageBytes, contentType);
                 String newPublicUrl = uploadResult.publicUrl();
 
                 // Update outfit in database
@@ -143,7 +143,7 @@ public class ImgurToMinioRehostService {
         }
 
         RehostReport report = new RehostReport(totalFound, processed, succeeded, failed, skipped, dryRun, failures);
-        logger.info("Imgur to MinIO rehost migration finished: {}", report);
+        logger.info("Imgur to SeaweedFS rehost migration finished: {}", report);
         return report;
     }
 

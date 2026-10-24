@@ -70,7 +70,7 @@ class GallerySlashCommandTest {
     void setUp() {
         properties = new BotProperties(
                 new BotProperties.DiscordProperties("token", 123456789L, "dev-guild", ""),
-                new BotProperties.MinioProperties("http://localhost:9000", "access", "secret", "bucket", "https://media.fashionscape.org")
+                new BotProperties.SeaweedProperties("http://localhost:8333", "access", "secret", "bucket", "https://media.fashionscape.org")
         );
         command = new GallerySlashCommand(galleryChannelRepository, new PermissionService(staticPermissionRepository, properties), auditService);
 

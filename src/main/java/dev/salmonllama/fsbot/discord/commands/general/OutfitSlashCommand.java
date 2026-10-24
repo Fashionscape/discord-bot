@@ -3,7 +3,6 @@ package dev.salmonllama.fsbot.discord.commands.general;
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.discord.commands.SlashCommand;
 import dev.salmonllama.fsbot.discord.components.ButtonHandler;
-import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.OutfitService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.EmbedBuilder;
@@ -18,6 +17,7 @@ import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
 import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.utils.FileUpload;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -40,12 +40,10 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
 
     private final OutfitService outfitService;
     private final PermissionService permissionService;
-    private final AuditService auditService;
 
-    public OutfitSlashCommand(OutfitService outfitService, PermissionService permissionService, AuditService auditService) {
+    public OutfitSlashCommand(OutfitService outfitService, PermissionService permissionService) {
         this.outfitService = outfitService;
         this.permissionService = permissionService;
-        this.auditService = auditService;
     }
 
     @Override
@@ -123,9 +121,10 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         }
 
         OutfitEntity outfit = outfitOpt.get();
+        outfitService.recordShown(outfit.getId());
         EmbedBuilder embed = buildOutfitEmbed(outfit);
 
-        Button upvoteBtn = Button.primary("gallery:upvote:" + outfit.getId(), "Upvote (" + outfit.getDisplayCount() + ")");
+        Button upvoteBtn = Button.primary("gallery:upvote:" + outfit.getId(), "Upvote (" + outfit.getVoteCount() + ")");
         event.replyEmbeds(embed.build())
                 .setActionRow(upvoteBtn)
                 .queue();
@@ -148,19 +147,27 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         }
 
         Optional<OutfitEntity> outfitOpt = outfitService.findById(id);
-        if (outfitOpt.isEmpty()) {
+        boolean staff = permissionService.isBotStaff(event.getUser().getId());
+        // Deleted outfits are only visible to bot staff; everyone else sees "not found"
+        if (outfitOpt.isEmpty() || (outfitOpt.get().isDeleted() && !staff)) {
             event.reply("Outfit `" + id + "` not found.").setEphemeral(true).queue();
             return;
         }
 
         OutfitEntity outfit = outfitOpt.get();
+        if (outfit.isDeleted()) {
+            replyDeletedInfo(event, outfit);
+            return;
+        }
+
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Outfit Details: " + outfit.getId())
                 .setImage(outfit.getLink())
                 .setColor(EMBED_COLOR)
                 .addField("Submitter", "<@" + outfit.getSubmitter() + "> (" + outfit.getDiscordName() + ")", true)
                 .addField("Tag", outfit.getTag() != null ? outfit.getTag() : "None", true)
-                .addField("Upvotes", String.valueOf(outfit.getDisplayCount()), true)
+                .addField("Upvotes", String.valueOf(outfit.getVoteCount()), true)
+                .addField("Times shown", String.valueOf(outfit.getDisplayCount()), true)
                 .addField("Status", outfit.isDeleted() ? "🗑️ Deleted" : "✅ Active", true)
                 .addField("Featured", outfit.isFeatured() ? "⭐ Yes" : "No", true)
                 .addField("Created", outfit.getCreated() != null ? outfit.getCreated().toString() : "Unknown", true)
@@ -171,6 +178,40 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         }
 
         event.replyEmbeds(embed.build()).queue();
+    }
+
+    /**
+     * Staff-only, ephemeral view of a deleted outfit. Its image is no longer public, so it is
+     * attached from storage rather than linked.
+     */
+    private void replyDeletedInfo(SlashCommandInteractionEvent event, OutfitEntity outfit) {
+        event.deferReply(true).queue();
+
+        EmbedBuilder embed = new EmbedBuilder()
+                .setTitle("Outfit Details: " + outfit.getId())
+                .setColor(Color.DARK_GRAY)
+                .addField("Submitter", "<@" + outfit.getSubmitter() + "> (" + outfit.getDiscordName() + ")", true)
+                .addField("Tag", outfit.getTag() != null ? outfit.getTag() : "None", true)
+                .addField("Status", "🗑️ Deleted", true)
+                .addField("Deleted by", outfit.getDeletedBy() != null ? "<@" + outfit.getDeletedBy() + ">" : "Unknown", true)
+                .addField("Deleted at", outfit.getDeletedAt() != null ? outfit.getDeletedAt().toString() : "Unknown", true)
+                .addField("Server", "`" + outfit.getServerId() + "`", true)
+                .setFooter("Only bot staff can see deleted outfits");
+
+        if (outfit.getMeta() != null && !outfit.getMeta().isBlank()) {
+            embed.setDescription(outfit.getMeta());
+        }
+
+        Optional<OutfitService.StoredImage> image = outfitService.getDeletedImage(outfit);
+        if (image.isPresent()) {
+            embed.setImage("attachment://" + image.get().fileName());
+            event.getHook().sendMessageEmbeds(embed.build())
+                    .addFiles(FileUpload.fromData(image.get().data(), image.get().fileName()))
+                    .queue();
+        } else {
+            embed.addField("Image", outfit.getLink(), false);
+            event.getHook().sendMessageEmbeds(embed.build()).queue();
+        }
     }
 
     private void handleSearch(SlashCommandInteractionEvent event) {
@@ -213,12 +254,14 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         }
 
         OutfitEntity outfit = outfitOpt.get();
+        String userId = event.getUser().getId();
         if (outfit.isDeleted()) {
-            event.reply("Outfit `" + id + "` is already deleted.").setEphemeral(true).queue();
+            event.reply(permissionService.isBotStaff(userId)
+                    ? "Outfit `" + id + "` is already deleted."
+                    : "Outfit `" + id + "` not found.").setEphemeral(true).queue();
             return;
         }
 
-        String userId = event.getUser().getId();
         Member member = event.getMember();
 
         if (!permissionService.canModerateOutfit(userId, member, outfit)) {
@@ -228,9 +271,18 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
             return;
         }
 
-        outfitService.delete(id);
-        audit(event, AuditService.Action.OUTFIT_DELETED, id,
-                userId.equals(outfit.getSubmitter()) ? "Deleted by its submitter" : "Deleted by staff (submitter <@" + outfit.getSubmitter() + ">)");
+        try {
+            if (!outfitService.delete(id, userId, guildId(event), event.getJDA())) {
+                event.reply("Outfit `" + id + "` not found.").setEphemeral(true).queue();
+                return;
+            }
+        } catch (OutfitService.OutfitImageException e) {
+            logger.error("Failed to delete outfit {}", id, e);
+            event.reply("Outfit `" + id + "` could not be deleted because its image couldn't be moved. Nothing was changed; please try again.")
+                    .setEphemeral(true).queue();
+            return;
+        }
+
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Outfit Deleted")
                 .setDescription("Outfit `" + id + "` has been marked as deleted.")
@@ -266,8 +318,17 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
             return;
         }
 
-        outfitService.restore(id);
-        audit(event, AuditService.Action.OUTFIT_RESTORED, id, null);
+        try {
+            if (!outfitService.restore(id, userId, guildId(event), event.getJDA())) {
+                event.reply("Outfit `" + id + "` is already active.").setEphemeral(true).queue();
+                return;
+            }
+        } catch (OutfitService.OutfitImageException e) {
+            logger.error("Failed to restore outfit {}", id, e);
+            event.reply("Outfit `" + id + "` could not be restored because its image couldn't be moved back. Nothing was changed; please try again.")
+                    .setEphemeral(true).queue();
+            return;
+        }
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Outfit Restored")
                 .setDescription("Outfit `" + id + "` has been restored and is now active.")
@@ -277,9 +338,8 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
         event.replyEmbeds(embed.build()).queue();
     }
 
-    private void audit(SlashCommandInteractionEvent event, AuditService.Action action, String outfitId, String details) {
-        String guildId = event.getGuild() != null ? event.getGuild().getId() : null;
-        auditService.record(event.getJDA(), action, event.getUser().getId(), guildId, AuditService.TARGET_OUTFIT, outfitId, details);
+    private static String guildId(SlashCommandInteractionEvent event) {
+        return event.getGuild() != null ? event.getGuild().getId() : null;
     }
 
     private EmbedBuilder buildOutfitEmbed(OutfitEntity outfit) {
@@ -326,7 +386,7 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
                     .append("` | Submitter: <@")
                     .append(outfit.getSubmitter())
                     .append("> | ❤️ ")
-                    .append(outfit.getDisplayCount())
+                    .append(outfit.getVoteCount())
                     .append("\n");
         }
 

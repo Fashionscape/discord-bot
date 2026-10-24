@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -53,4 +54,31 @@ public interface OutfitRepository extends JpaRepository<OutfitEntity, String>, J
     List<String> findDistinctTags();
 
     List<OutfitEntity> findByLinkContaining(String term);
+
+    boolean existsByIdAndDeletedFalse(String id);
+
+    // Votes: each statement is a single atomic SQL update. Call them through OutfitService.toggleVote.
+
+    @Modifying
+    @Query(value = "INSERT INTO outfit_votes (outfit_id, user_id, created) VALUES (:outfitId, :userId, CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING", nativeQuery = true)
+    int insertVote(@Param("outfitId") String outfitId, @Param("userId") String userId);
+
+    @Modifying
+    @Query(value = "DELETE FROM outfit_votes WHERE outfit_id = :outfitId AND user_id = :userId", nativeQuery = true)
+    int deleteVote(@Param("outfitId") String outfitId, @Param("userId") String userId);
+
+    @Modifying
+    @Query(value = "UPDATE outfits SET vote_count = vote_count + 1 WHERE id = :id AND deleted = false", nativeQuery = true)
+    int incrementVoteCount(@Param("id") String id);
+
+    @Modifying
+    @Query(value = "UPDATE outfits SET vote_count = vote_count - 1 WHERE id = :id AND deleted = false AND vote_count > 0", nativeQuery = true)
+    int decrementVoteCount(@Param("id") String id);
+
+    @Query(value = "SELECT vote_count FROM outfits WHERE id = :id", nativeQuery = true)
+    Optional<Integer> findVoteCount(@Param("id") String id);
+
+    @Modifying
+    @Query(value = "UPDATE outfits SET display_count = display_count + 1 WHERE id = :id", nativeQuery = true)
+    int incrementDisplayCount(@Param("id") String id);
 }

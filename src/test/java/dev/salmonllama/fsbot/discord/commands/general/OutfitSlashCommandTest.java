@@ -4,7 +4,6 @@ import dev.salmonllama.fsbot.config.BotProperties;
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
 import dev.salmonllama.fsbot.services.OutfitService;
-import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
@@ -47,7 +46,10 @@ class OutfitSlashCommandTest {
     private StaticPermissionRepository staticPermissionRepository;
 
     @Mock
-    private AuditService auditService;
+    private net.dv8tion.jda.api.interactions.InteractionHook interactionHook;
+
+    @Mock
+    private net.dv8tion.jda.api.requests.restaction.WebhookMessageCreateAction<net.dv8tion.jda.api.entities.Message> webhookAction;
 
     @Mock
     private SlashCommandInteractionEvent slashEvent;
@@ -80,9 +82,9 @@ class OutfitSlashCommandTest {
     void setUp() {
         properties = new BotProperties(
                 new BotProperties.DiscordProperties("token", 123456789L, "dev-guild", ""),
-                new BotProperties.MinioProperties("http://localhost:9000", "access", "secret", "bucket", "https://media.fashionscape.org")
+                new BotProperties.SeaweedProperties("http://localhost:8333", "access", "secret", "bucket", "https://media.fashionscape.org")
         );
-        command = new OutfitSlashCommand(outfitService, new PermissionService(staticPermissionRepository, properties), auditService);
+        command = new OutfitSlashCommand(outfitService, new PermissionService(staticPermissionRepository, properties));
 
         when(slashEvent.getUser()).thenReturn(mockUser);
         when(mockUser.getId()).thenReturn("1001");
@@ -120,6 +122,7 @@ class OutfitSlashCommandTest {
         verify(slashEvent).replyEmbeds(embedCaptor.capture());
         MessageEmbed embed = embedCaptor.getValue();
         assertEquals("Outfit by Player1", embed.getTitle());
+        verify(outfitService).recordShown("outfit-1");
         verify(replyCallbackAction).queue();
     }
 
@@ -137,6 +140,9 @@ class OutfitSlashCommandTest {
         verify(slashEvent).replyEmbeds(embedCaptor.capture());
         MessageEmbed embed = embedCaptor.getValue();
         assertEquals("Outfit Details: outfit-123", embed.getTitle());
+        assertTrue(embed.getFields().stream().anyMatch(f -> "Upvotes".equals(f.getName()) && "0".equals(f.getValue())));
+        assertTrue(embed.getFields().stream().anyMatch(f -> "Times shown".equals(f.getName()) && "7".equals(f.getValue())));
+        verify(outfitService, never()).recordShown(anyString());
     }
 
     @Test
@@ -163,12 +169,88 @@ class OutfitSlashCommandTest {
         OutfitEntity outfit = new OutfitEntity("outfit-to-delete", "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
         when(outfitService.findById("outfit-to-delete")).thenReturn(Optional.of(outfit));
 
+        when(outfitService.delete(eq("outfit-to-delete"), eq("1001"), any(), any())).thenReturn(true);
+
         command.execute(slashEvent);
 
-        verify(outfitService).delete("outfit-to-delete");
+        verify(outfitService).delete(eq("outfit-to-delete"), eq("1001"), any(), any());
         verify(slashEvent).replyEmbeds(any(MessageEmbed.class));
-        verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_DELETED), eq("1001"), any(),
-                eq(AuditService.TARGET_OUTFIT), eq("outfit-to-delete"), eq("Deleted by its submitter"));
+    }
+
+    @Test
+    void testExecuteDeleteImageMoveFails() {
+        when(slashEvent.getSubcommandName()).thenReturn("delete");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-to-delete");
+
+        OutfitEntity outfit = new OutfitEntity("outfit-to-delete", "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        when(outfitService.findById("outfit-to-delete")).thenReturn(Optional.of(outfit));
+        when(outfitService.delete(eq("outfit-to-delete"), eq("1001"), any(), any()))
+                .thenThrow(new OutfitService.OutfitImageException("boom", new RuntimeException()));
+
+        command.execute(slashEvent);
+
+        verify(slashEvent).reply(contains("Nothing was changed"));
+        verify(slashEvent, never()).replyEmbeds(any(MessageEmbed.class));
+    }
+
+    @Test
+    void testExecuteDeleteAlreadyDeletedLooksMissingToNonStaff() {
+        when(slashEvent.getSubcommandName()).thenReturn("delete");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-gone");
+
+        OutfitEntity outfit = new OutfitEntity("outfit-gone", "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), true, false, 0, null, "server-1", "channel-1");
+        when(outfitService.findById("outfit-gone")).thenReturn(Optional.of(outfit));
+
+        command.execute(slashEvent);
+
+        verify(slashEvent).reply(contains("not found"));
+        verify(outfitService, never()).delete(any(), any(), any(), any());
+    }
+
+    @Test
+    void testInfoOnDeletedOutfitIsNotFoundForNonStaff() {
+        when(slashEvent.getSubcommandName()).thenReturn("info");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-gone");
+
+        OutfitEntity outfit = new OutfitEntity("outfit-gone", "https://media.fashionscape.org/outfits/outfit-gone.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), true, false, 0, null, "server-1", "channel-1");
+        when(outfitService.findById("outfit-gone")).thenReturn(Optional.of(outfit));
+
+        command.execute(slashEvent);
+
+        verify(slashEvent).reply("Outfit `outfit-gone` not found.");
+        verify(slashEvent, never()).replyEmbeds(any(MessageEmbed.class));
+        verify(outfitService, never()).getDeletedImage(any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testInfoOnDeletedOutfitForStaffIsEphemeralWithAttachedImage() {
+        when(slashEvent.getSubcommandName()).thenReturn("info");
+        when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-gone");
+        when(mockUser.getId()).thenReturn("123456789"); // bot owner id
+        when(slashEvent.deferReply(true)).thenReturn(replyCallbackAction);
+        when(slashEvent.getHook()).thenReturn(interactionHook);
+        when(interactionHook.sendMessageEmbeds(any(MessageEmbed.class))).thenReturn(webhookAction);
+        when(webhookAction.addFiles(any(net.dv8tion.jda.api.utils.FileUpload[].class))).thenReturn(webhookAction);
+
+        OutfitEntity outfit = new OutfitEntity("outfit-gone", "https://media.fashionscape.org/outfits/outfit-gone.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), true, false, 0, null, "server-1", "channel-1");
+        outfit.setDeletedBy("1001");
+        outfit.setDeletedAt(Instant.now());
+        when(outfitService.findById("outfit-gone")).thenReturn(Optional.of(outfit));
+        when(outfitService.getDeletedImage(outfit))
+                .thenReturn(Optional.of(new OutfitService.StoredImage("outfit-gone.png", new byte[]{1})));
+
+        command.execute(slashEvent);
+
+        verify(slashEvent).deferReply(true);
+        ArgumentCaptor<MessageEmbed> embedCaptor = ArgumentCaptor.forClass(MessageEmbed.class);
+        verify(interactionHook).sendMessageEmbeds(embedCaptor.capture());
+        MessageEmbed embed = embedCaptor.getValue();
+        assertEquals("attachment://outfit-gone.png", embed.getImage().getUrl());
+        assertTrue(embed.getFields().stream().anyMatch(f -> "Deleted by".equals(f.getName()) && "<@1001>".equals(f.getValue())));
+        verify(webhookAction).addFiles(any(net.dv8tion.jda.api.utils.FileUpload[].class));
+        verify(webhookAction).queue();
+        verify(slashEvent, never()).replyEmbeds(any(MessageEmbed.class));
     }
 
     @Test
@@ -184,9 +266,8 @@ class OutfitSlashCommandTest {
 
         command.execute(slashEvent);
 
-        verify(outfitService, never()).delete("outfit-not-mine");
+        verify(outfitService, never()).delete(any(), any(), any(), any());
         verify(slashEvent).reply(contains("You do not have permission"));
-        verifyNoInteractions(auditService);
     }
 
     @Test
@@ -204,7 +285,7 @@ class OutfitSlashCommandTest {
 
         command.execute(slashEvent);
 
-        verify(outfitService, never()).delete("outfit-elsewhere");
+        verify(outfitService, never()).delete(any(), any(), any(), any());
         verify(slashEvent).reply(contains("You do not have permission"));
     }
 
@@ -218,7 +299,7 @@ class OutfitSlashCommandTest {
 
         command.execute(slashEvent);
 
-        verify(outfitService, never()).restore(anyString());
+        verify(outfitService, never()).restore(any(), any(), any(), any());
         verify(slashEvent).reply(contains("staff member"));
     }
 
@@ -231,12 +312,12 @@ class OutfitSlashCommandTest {
         OutfitEntity outfit = new OutfitEntity("outfit-del", "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), true, false, 0, null, "server-1", "channel-1");
         when(outfitService.findById("outfit-del")).thenReturn(Optional.of(outfit));
 
+        when(outfitService.restore(eq("outfit-del"), eq("123456789"), any(), any())).thenReturn(true);
+
         command.execute(slashEvent);
 
-        verify(outfitService).restore("outfit-del");
+        verify(outfitService).restore(eq("outfit-del"), eq("123456789"), any(), any());
         verify(slashEvent).replyEmbeds(any(MessageEmbed.class));
-        verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_RESTORED), eq("123456789"), any(),
-                eq(AuditService.TARGET_OUTFIT), eq("outfit-del"), any());
     }
 
     @Test

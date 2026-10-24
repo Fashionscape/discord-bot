@@ -10,7 +10,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      minio:
+      seaweed:
         condition: service_healthy
 
   postgres:
@@ -31,25 +31,26 @@ services:
       timeout: 5s
       retries: 5
 
-  minio:
-    image: minio/minio:latest
-    container_name: fsbot-minio
+  seaweed:
+    # Single-node SeaweedFS: `weed mini` (the image's default command) runs master, volume,
+    # filer and the S3 gateway in one container. See docs/adr/0001-seaweedfs-object-storage.md.
+    image: chrislusf/seaweedfs:4.48
+    container_name: fsbot-seaweed
     restart: unless-stopped
-    command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+      # Creates the S3 admin identity. Without these SeaweedFS allows all anonymous requests.
+      AWS_ACCESS_KEY_ID: ${SEAWEED_ACCESS_KEY:?set SEAWEED_ACCESS_KEY in .env}
+      AWS_SECRET_ACCESS_KEY: ${SEAWEED_SECRET_KEY:?set SEAWEED_SECRET_KEY in .env}
     volumes:
-      - minio_data:/data
+      - seaweed_data:/data
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "8333:8333"
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
 
 volumes:
   postgres_data:
-  minio_data:
+  seaweed_data:

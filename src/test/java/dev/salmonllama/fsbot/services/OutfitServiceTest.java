@@ -2,6 +2,7 @@ package dev.salmonllama.fsbot.services;
 
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
+import dev.salmonllama.fsbot.storage.SeaweedStorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +18,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,11 +28,17 @@ class OutfitServiceTest {
     @Mock
     private OutfitRepository outfitRepository;
 
+    @Mock
+    private SeaweedStorageService storageService;
+
+    @Mock
+    private AuditService auditService;
+
     private OutfitService outfitService;
 
     @BeforeEach
     void setUp() {
-        outfitService = new OutfitService(outfitRepository);
+        outfitService = new OutfitService(outfitRepository, storageService, auditService);
     }
 
     private OutfitEntity createSampleOutfit(String id) {
@@ -131,34 +140,170 @@ class OutfitServiceTest {
     }
 
     @Test
-    void testUpvote() {
-        OutfitEntity outfit = createSampleOutfit("upvote-me");
-        outfit.setDisplayCount(10);
-        when(outfitRepository.findById("upvote-me")).thenReturn(Optional.of(outfit));
-        when(outfitRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    void testToggleVoteAdds() {
+        when(outfitRepository.existsByIdAndDeletedFalse("o-1")).thenReturn(true);
+        when(outfitRepository.insertVote("o-1", "voter")).thenReturn(1);
+        when(outfitRepository.incrementVoteCount("o-1")).thenReturn(1);
+        when(outfitRepository.findVoteCount("o-1")).thenReturn(Optional.of(6));
 
-        Optional<OutfitEntity> updated = outfitService.upvote("upvote-me");
-        assertTrue(updated.isPresent());
-        assertEquals(11, updated.get().getDisplayCount());
+        Optional<OutfitService.VoteResult> result = outfitService.toggleVote("o-1", "voter");
+
+        assertEquals(Optional.of(new OutfitService.VoteResult(true, 6)), result);
+        verify(outfitRepository, never()).deleteVote(any(), any());
+        verify(outfitRepository, never()).save(any());
     }
 
     @Test
-    void testDeleteAndRestore() {
+    void testToggleVoteRemovesExistingVote() {
+        when(outfitRepository.existsByIdAndDeletedFalse("o-1")).thenReturn(true);
+        when(outfitRepository.insertVote("o-1", "voter")).thenReturn(0);
+        when(outfitRepository.deleteVote("o-1", "voter")).thenReturn(1);
+        when(outfitRepository.findVoteCount("o-1")).thenReturn(Optional.of(4));
+
+        Optional<OutfitService.VoteResult> result = outfitService.toggleVote("o-1", "voter");
+
+        assertEquals(Optional.of(new OutfitService.VoteResult(false, 4)), result);
+        verify(outfitRepository).decrementVoteCount("o-1");
+        verify(outfitRepository, never()).incrementVoteCount(any());
+    }
+
+    @Test
+    void testToggleVoteOnDeletedOutfit() {
+        when(outfitRepository.existsByIdAndDeletedFalse("gone")).thenReturn(false);
+
+        assertTrue(outfitService.toggleVote("gone", "voter").isEmpty());
+        verify(outfitRepository, never()).insertVote(any(), any());
+        verify(outfitRepository, never()).incrementVoteCount(any());
+    }
+
+    @Test
+    void testToggleVoteOutfitDeletedMidVote() {
+        when(outfitRepository.existsByIdAndDeletedFalse("o-1")).thenReturn(true);
+        when(outfitRepository.insertVote("o-1", "voter")).thenReturn(1);
+        when(outfitRepository.incrementVoteCount("o-1")).thenReturn(0);
+
+        assertTrue(outfitService.toggleVote("o-1", "voter").isEmpty());
+        verify(outfitRepository).deleteVote("o-1", "voter");
+    }
+
+    @Test
+    void testRecordShown() {
+        outfitService.recordShown("o-1");
+        verify(outfitRepository).incrementDisplayCount("o-1");
+    }
+
+    private void stubImageKey(OutfitEntity outfit) {
+        String key = "outfits/" + outfit.getId() + ".png";
+        when(storageService.extractObjectKey(outfit.getLink())).thenReturn(Optional.of(key));
+    }
+
+    @Test
+    void testDeleteQuarantinesImageThenMarksDeletedAndAudits() throws Exception {
         OutfitEntity outfit = createSampleOutfit("del-me");
-        outfit.setDeleted(false);
-        when(outfitRepository.findById("del-me")).thenReturn(Optional.of(outfit));
-        when(outfitRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        stubImageKey(outfit);
+        when(outfitRepository.findByIdAndDeletedFalse("del-me")).thenReturn(Optional.of(outfit));
 
-        boolean deleted = outfitService.delete("del-me");
-        assertTrue(deleted);
+        assertTrue(outfitService.delete("del-me", "user-1", "server-1", null));
+
+        var order = inOrder(storageService, outfitRepository, auditService);
+        order.verify(storageService).quarantine("outfits/del-me.png");
+        order.verify(outfitRepository).save(outfit);
+        order.verify(auditService).record(isNull(), eq(AuditService.Action.OUTFIT_DELETED), eq("user-1"), eq("server-1"),
+                eq(AuditService.TARGET_OUTFIT), eq("del-me"), eq("Deleted by its submitter"));
         assertTrue(outfit.isDeleted());
+        assertEquals("user-1", outfit.getDeletedBy());
+        assertNotNull(outfit.getDeletedAt());
+    }
 
-        boolean restored = outfitService.restore("del-me");
-        assertTrue(restored);
+    @Test
+    void testDeleteByStaffNamesSubmitterInAudit() {
+        OutfitEntity outfit = createSampleOutfit("del-me");
+        stubImageKey(outfit);
+        when(outfitRepository.findByIdAndDeletedFalse("del-me")).thenReturn(Optional.of(outfit));
+
+        outfitService.delete("del-me", "staff-1", "server-1", null);
+
+        verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_DELETED), eq("staff-1"), any(),
+                any(), eq("del-me"), eq("Deleted by staff (submitter <@user-1>)"));
+    }
+
+    @Test
+    void testDeleteChangesNothingWhenImageMoveFails() throws Exception {
+        OutfitEntity outfit = createSampleOutfit("del-me");
+        stubImageKey(outfit);
+        when(outfitRepository.findByIdAndDeletedFalse("del-me")).thenReturn(Optional.of(outfit));
+        doThrow(new RuntimeException("SeaweedFS down")).when(storageService).quarantine("outfits/del-me.png");
+
+        assertThrows(OutfitService.OutfitImageException.class,
+                () -> outfitService.delete("del-me", "user-1", "server-1", null));
+
         assertFalse(outfit.isDeleted());
+        assertNull(outfit.getDeletedBy());
+        verify(outfitRepository, never()).save(any());
+        verifyNoInteractions(auditService);
+    }
 
-        assertFalse(outfitService.delete("non-existent"));
-        assertFalse(outfitService.restore("non-existent"));
+    @Test
+    void testDeleteWithExternalImageSkipsStorage() throws Exception {
+        OutfitEntity outfit = createSampleOutfit("legacy");
+        when(storageService.extractObjectKey(outfit.getLink())).thenReturn(Optional.empty());
+        when(outfitRepository.findByIdAndDeletedFalse("legacy")).thenReturn(Optional.of(outfit));
+
+        assertTrue(outfitService.delete("legacy", "user-1", null, null));
+
+        verify(storageService, never()).quarantine(any());
+        assertTrue(outfit.isDeleted());
+    }
+
+    @Test
+    void testDeleteMissingOrAlreadyDeleted() {
+        when(outfitRepository.findByIdAndDeletedFalse("gone")).thenReturn(Optional.empty());
+
+        assertFalse(outfitService.delete("gone", "user-1", null, null));
+        verifyNoInteractions(storageService, auditService);
+    }
+
+    @Test
+    void testRestoreReleasesImageAndClearsDeletion() throws Exception {
+        OutfitEntity outfit = createSampleOutfit("res-me");
+        outfit.setDeleted(true);
+        outfit.setDeletedBy("user-1");
+        outfit.setDeletedAt(Instant.now());
+        stubImageKey(outfit);
+        when(outfitRepository.findById("res-me")).thenReturn(Optional.of(outfit));
+
+        assertTrue(outfitService.restore("res-me", "staff-1", "home", null));
+
+        var order = inOrder(storageService, outfitRepository, auditService);
+        order.verify(storageService).release("outfits/res-me.png");
+        order.verify(outfitRepository).save(outfit);
+        order.verify(auditService).record(isNull(), eq(AuditService.Action.OUTFIT_RESTORED), eq("staff-1"), eq("home"),
+                eq(AuditService.TARGET_OUTFIT), eq("res-me"), isNull());
+        assertFalse(outfit.isDeleted());
+        assertNull(outfit.getDeletedBy());
+        assertNull(outfit.getDeletedAt());
+    }
+
+    @Test
+    void testRestoreActiveOutfitDoesNothing() {
+        OutfitEntity outfit = createSampleOutfit("active");
+        when(outfitRepository.findById("active")).thenReturn(Optional.of(outfit));
+
+        assertFalse(outfitService.restore("active", "staff-1", null, null));
+        verifyNoInteractions(storageService, auditService);
+    }
+
+    @Test
+    void testGetDeletedImageReadsQuarantinedObject() throws Exception {
+        OutfitEntity outfit = createSampleOutfit("del-me");
+        stubImageKey(outfit);
+        when(storageService.getObjectBytes("deleted/outfits/del-me.png")).thenReturn(new byte[]{1, 2, 3});
+
+        Optional<OutfitService.StoredImage> image = outfitService.getDeletedImage(outfit);
+
+        assertTrue(image.isPresent());
+        assertEquals("del-me.png", image.get().fileName());
+        assertArrayEquals(new byte[]{1, 2, 3}, image.get().data());
     }
 
     @Test

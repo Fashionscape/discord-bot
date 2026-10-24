@@ -8,8 +8,9 @@ import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
 import dev.salmonllama.fsbot.database.repositories.StaticPermissionRepository;
 import dev.salmonllama.fsbot.services.BlocklistService;
 import dev.salmonllama.fsbot.services.AuditService;
+import dev.salmonllama.fsbot.services.OutfitService;
 import dev.salmonllama.fsbot.services.PermissionService;
-import dev.salmonllama.fsbot.storage.MinioStorageService;
+import dev.salmonllama.fsbot.storage.SeaweedStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.*;
@@ -50,7 +51,10 @@ class GalleryEventListenerTest {
     private OutfitRepository outfitRepository;
 
     @Mock
-    private MinioStorageService minioStorageService;
+    private OutfitService outfitService;
+
+    @Mock
+    private SeaweedStorageService storageService;
 
     @Mock
     private BlocklistService blocklistService;
@@ -100,12 +104,13 @@ class GalleryEventListenerTest {
     void setUp() {
         BotProperties properties = new BotProperties(
                 new BotProperties.DiscordProperties("token", 123456789L, "", "home-guild"),
-                new BotProperties.MinioProperties("http://localhost:9000", "access", "secret", "bucket", "https://media.fashionscape.org")
+                new BotProperties.SeaweedProperties("http://localhost:8333", "access", "secret", "bucket", "https://media.fashionscape.org")
         );
         listener = new GalleryEventListener(
                 galleryChannelRepository,
                 outfitRepository,
-                minioStorageService,
+                outfitService,
+                storageService,
                 blocklistService,
                 new PermissionService(staticPermissionRepository, properties),
                 auditService
@@ -127,7 +132,7 @@ class GalleryEventListenerTest {
 
         listener.onMessageReceived(messageEvent);
 
-        verifyNoInteractions(galleryChannelRepository, minioStorageService, outfitRepository);
+        verifyNoInteractions(galleryChannelRepository, storageService, outfitRepository);
     }
 
     @Test
@@ -139,7 +144,7 @@ class GalleryEventListenerTest {
 
         listener.onMessageReceived(messageEvent);
 
-        verifyNoInteractions(galleryChannelRepository, minioStorageService, outfitRepository);
+        verifyNoInteractions(galleryChannelRepository, storageService, outfitRepository);
     }
 
     @Test
@@ -158,7 +163,7 @@ class GalleryEventListenerTest {
 
         listener.onMessageReceived(messageEvent);
 
-        verifyNoInteractions(galleryChannelRepository, minioStorageService, outfitRepository);
+        verifyNoInteractions(galleryChannelRepository, storageService, outfitRepository);
     }
 
     @Test
@@ -178,7 +183,7 @@ class GalleryEventListenerTest {
 
         listener.onMessageReceived(messageEvent);
 
-        verifyNoInteractions(minioStorageService, outfitRepository);
+        verifyNoInteractions(storageService, outfitRepository);
     }
 
     private void stubGalleryImageUpload() throws Exception {
@@ -206,7 +211,7 @@ class GalleryEventListenerTest {
         when(message.getAttachments()).thenReturn(List.of(attachment));
 
         UploadResult uploadResult = new UploadResult("outfits/id.png", "https://media.fashionscape.org/outfits/id.png", "bucket", 1024, "image/png");
-        when(minioStorageService.uploadOutfitFromUrl(anyString(), eq("https://cdn.discordapp.com/attachments/1/2/pic.png")))
+        when(storageService.uploadOutfitFromUrl(anyString(), eq("https://cdn.discordapp.com/attachments/1/2/pic.png")))
                 .thenReturn(uploadResult);
 
         when(channel.sendMessageEmbeds(any(MessageEmbed.class))).thenReturn(messageCreateAction);
@@ -262,15 +267,16 @@ class GalleryEventListenerTest {
     @SuppressWarnings("unchecked")
     void testHandleUpvote() {
         when(buttonEvent.getComponentId()).thenReturn("gallery:upvote:outfit-99");
+        when(buttonEvent.getUser()).thenReturn(author);
+        when(author.getId()).thenReturn("voter-1");
         when(buttonEvent.getHook()).thenReturn(interactionHook);
-
-        OutfitEntity outfit = new OutfitEntity(
-                "outfit-99", "https://media.fashionscape.org/1.png", "user-1", "tag", null,
-                "Player", Instant.now(), Instant.now(), false, false, 3, null,
-                "server-1",
-                "channel-1"
-        );
-        when(outfitRepository.findByIdAndDeletedFalse("outfit-99")).thenReturn(Optional.of(outfit));
+        when(buttonEvent.getMessage()).thenReturn(message);
+        when(message.getButtons()).thenReturn(List.of(
+                net.dv8tion.jda.api.interactions.components.buttons.Button.primary("gallery:upvote:outfit-99", "Upvote (3)"),
+                net.dv8tion.jda.api.interactions.components.buttons.Button.danger("gallery:delete:outfit-99", "Delete")
+        ));
+        when(outfitService.toggleVote("outfit-99", "voter-1"))
+                .thenReturn(Optional.of(new OutfitService.VoteResult(true, 4)));
         when(buttonEvent.editComponents(any(net.dv8tion.jda.api.interactions.components.ActionRow.class)))
                 .thenReturn(messageEditCallbackAction);
 
@@ -286,9 +292,67 @@ class GalleryEventListenerTest {
 
         listener.handle(buttonEvent);
 
-        assertEquals(4, outfit.getDisplayCount());
-        verify(outfitRepository).save(outfit);
+        ArgumentCaptor<net.dv8tion.jda.api.interactions.components.ActionRow> rowCaptor =
+                ArgumentCaptor.forClass(net.dv8tion.jda.api.interactions.components.ActionRow.class);
+        verify(buttonEvent).editComponents(rowCaptor.capture());
+        List<net.dv8tion.jda.api.interactions.components.buttons.Button> buttons = rowCaptor.getValue().getButtons();
+        assertEquals(2, buttons.size());
+        assertEquals("Upvote (4)", buttons.get(0).getLabel());
+        assertEquals("Delete", buttons.get(1).getLabel());
+        verify(interactionHook).sendMessage(contains("Vote added"));
         verify(webhookAction).queue();
+        verify(outfitRepository, never()).save(any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testHandleUpvoteToggleOff() {
+        when(buttonEvent.getComponentId()).thenReturn("gallery:upvote:outfit-99");
+        when(buttonEvent.getUser()).thenReturn(author);
+        when(author.getId()).thenReturn("voter-1");
+        when(buttonEvent.getHook()).thenReturn(interactionHook);
+        when(buttonEvent.getMessage()).thenReturn(message);
+        when(message.getButtons()).thenReturn(List.of(
+                net.dv8tion.jda.api.interactions.components.buttons.Button.primary("gallery:upvote:outfit-99", "Upvote (4)")
+        ));
+        when(outfitService.toggleVote("outfit-99", "voter-1"))
+                .thenReturn(Optional.of(new OutfitService.VoteResult(false, 3)));
+        when(buttonEvent.editComponents(any(net.dv8tion.jda.api.interactions.components.ActionRow.class)))
+                .thenReturn(messageEditCallbackAction);
+
+        doAnswer(invocation -> {
+            Consumer<Void> consumer = invocation.getArgument(0);
+            consumer.accept(null);
+            return null;
+        }).when(messageEditCallbackAction).queue(any(Consumer.class));
+
+        WebhookMessageCreateAction webhookAction = mock(WebhookMessageCreateAction.class);
+        when(interactionHook.sendMessage(anyString())).thenReturn(webhookAction);
+        when(webhookAction.setEphemeral(true)).thenReturn(webhookAction);
+
+        listener.handle(buttonEvent);
+
+        ArgumentCaptor<net.dv8tion.jda.api.interactions.components.ActionRow> rowCaptor =
+                ArgumentCaptor.forClass(net.dv8tion.jda.api.interactions.components.ActionRow.class);
+        verify(buttonEvent).editComponents(rowCaptor.capture());
+        assertEquals(1, rowCaptor.getValue().getButtons().size());
+        assertEquals("Upvote (3)", rowCaptor.getValue().getButtons().get(0).getLabel());
+        verify(interactionHook).sendMessage(contains("Vote removed"));
+    }
+
+    @Test
+    void testHandleUpvoteOnDeletedOutfit() {
+        when(buttonEvent.getComponentId()).thenReturn("gallery:upvote:outfit-gone");
+        when(buttonEvent.getUser()).thenReturn(author);
+        when(author.getId()).thenReturn("voter-1");
+        when(outfitService.toggleVote("outfit-gone", "voter-1")).thenReturn(Optional.empty());
+        when(buttonEvent.reply(anyString())).thenReturn(replyCallbackAction);
+        when(replyCallbackAction.setEphemeral(true)).thenReturn(replyCallbackAction);
+
+        listener.handle(buttonEvent);
+
+        verify(buttonEvent).reply(contains("could not be found"));
+        verify(buttonEvent, never()).editComponents(any(net.dv8tion.jda.api.interactions.components.ActionRow.class));
     }
 
     @Test
@@ -320,13 +384,38 @@ class GalleryEventListenerTest {
         when(interactionHook.sendMessage(anyString())).thenReturn(webhookAction);
         when(webhookAction.setEphemeral(true)).thenReturn(webhookAction);
 
+        when(outfitService.delete(eq("outfit-99"), eq("user-submitter"), any(), any())).thenReturn(true);
+
         listener.handle(buttonEvent);
 
-        assertTrue(outfit.isDeleted());
-        verify(outfitRepository).save(outfit);
+        // Deletion goes through OutfitService, which quarantines the image and audits
+        verify(outfitService).delete(eq("outfit-99"), eq("user-submitter"), any(), any());
+        verify(outfitRepository, never()).save(any());
         verify(webhookAction).queue();
-        verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_DELETED), eq("user-submitter"), any(),
-                eq(AuditService.TARGET_OUTFIT), eq("outfit-99"), eq("Deleted by its submitter"));
+    }
+
+    @Test
+    void testHandleDeleteImageMoveFails() {
+        when(buttonEvent.getComponentId()).thenReturn("gallery:delete:outfit-99");
+        when(buttonEvent.getUser()).thenReturn(author);
+        when(author.getId()).thenReturn("user-submitter");
+
+        OutfitEntity outfit = new OutfitEntity(
+                "outfit-99", "https://media.fashionscape.org/outfits/outfit-99.png", "user-submitter", "tag", null,
+                "Player", Instant.now(), Instant.now(), false, false, 0, null,
+                "server-1",
+                "channel-1"
+        );
+        when(outfitRepository.findByIdAndDeletedFalse("outfit-99")).thenReturn(Optional.of(outfit));
+        when(outfitService.delete(eq("outfit-99"), eq("user-submitter"), any(), any()))
+                .thenThrow(new OutfitService.OutfitImageException("boom", new RuntimeException()));
+        when(buttonEvent.reply(anyString())).thenReturn(replyCallbackAction);
+        when(replyCallbackAction.setEphemeral(true)).thenReturn(replyCallbackAction);
+
+        listener.handle(buttonEvent);
+
+        verify(buttonEvent).reply(contains("Nothing was changed"));
+        verify(buttonEvent, never()).editMessageEmbeds(any(MessageEmbed.class));
     }
 
     @Test
@@ -351,8 +440,7 @@ class GalleryEventListenerTest {
 
         listener.handle(buttonEvent);
 
-        assertFalse(outfit.isDeleted());
-        verify(outfitRepository, never()).save(any());
+        verifyNoInteractions(outfitService);
         verify(buttonEvent).reply(contains("do not have permission"));
         verifyNoInteractions(auditService);
     }
@@ -379,8 +467,7 @@ class GalleryEventListenerTest {
 
         listener.handle(buttonEvent);
 
-        assertFalse(outfit.isDeleted());
-        verify(outfitRepository, never()).save(any());
+        verifyNoInteractions(outfitService);
         verify(buttonEvent).reply(contains("do not have permission"));
     }
 
@@ -419,11 +506,11 @@ class GalleryEventListenerTest {
         when(interactionHook.sendMessage(anyString())).thenReturn(webhookAction);
         when(webhookAction.setEphemeral(true)).thenReturn(webhookAction);
 
+        when(outfitService.delete(eq("outfit-99"), eq("home-mod"), any(), any())).thenReturn(true);
+
         listener.handle(buttonEvent);
 
-        assertTrue(outfit.isDeleted());
-        verify(outfitRepository).save(outfit);
-        verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_DELETED), eq("home-mod"), any(),
-                eq(AuditService.TARGET_OUTFIT), eq("outfit-99"), contains("Deleted by staff"));
+        verify(outfitService).delete(eq("outfit-99"), eq("home-mod"), any(), any());
+        verify(webhookAction).queue();
     }
 }

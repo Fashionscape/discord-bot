@@ -36,11 +36,11 @@ Items 1–3 of that review (cross-server staff permissions, vote integrity, dele
 ## Review: Security & Hardening
 
 ### Gallery Upload Validation
-**What:** Cap attachment size before downloading, allow only `image/png`, `image/jpeg`, `image/gif`, and `image/webp`, and verify the file's magic bytes instead of trusting the filename (`isImage`) and the reported `Content-Type`. Stream to MinIO rather than reading the whole body into memory (`MinioStorageService.uploadOutfitFromUrl`).
+**What:** Cap attachment size before downloading, allow only `image/png`, `image/jpeg`, `image/gif`, and `image/webp`, and verify the file's magic bytes instead of trusting the filename (`isImage`) and the reported `Content-Type`. Stream to object storage rather than reading the whole body into memory (`SeaweedStorageService.uploadOutfitFromUrl`).
 **Why:** A large attachment can exhaust the 3.5 GB heap, and arbitrary content types end up served from the public media domain.
 
 ### Docker Compose Hardening
-**What:** Stop publishing Postgres (5432), MinIO (9000/9001), and the actuator port (8080) on all interfaces; bind to `127.0.0.1` or drop the mappings. Refuse to start with the default `minioadmin` credentials. Run the bot container as a non-root user. Pin `minio/minio` to a release instead of `latest`.
+**What:** Stop publishing Postgres (5432), SeaweedFS S3 (8333), and the actuator port (8080) on all interfaces; bind to `127.0.0.1` or drop the mappings. Refuse to start with the default `seaweedadmin` credentials. Run the bot container as a non-root user.
 **Why:** The defaults expose the database and object storage to anyone who can reach the host.
 
 ### Command Cooldowns & Rate Limits
@@ -50,7 +50,7 @@ Items 1–3 of that review (cross-server staff permissions, vote integrity, dele
 ## Review: Correctness & Data Integrity
 
 ### Atomic Gallery Ingestion
-**What:** Make upload → save → showcase post recoverable: delete the MinIO object if the database save fails, and retry or flag outfits whose showcase post failed.
+**What:** Make upload → save → showcase post recoverable: delete the stored object if the database save fails, and retry or flag outfits whose showcase post failed.
 **Why:** Failures today leave orphaned images in storage or outfits nobody ever sees.
 
 ### Search Pagination Button IDs
@@ -58,7 +58,7 @@ Items 1–3 of that review (cross-server staff permissions, vote integrity, dele
 **Why:** Discord caps component IDs at 100 characters, so long tags throw an error, and a tag containing `:` breaks the parser in `OutfitSlashCommand.handle`.
 
 ### Imgur Rehost Fixes
-**What:** Disable redirect-following (or reject `removed.png`) in `ImgurToMinioRehostService`, and move `updateOutfitLink` into a separate bean so its `@Transactional` actually applies.
+**What:** Disable redirect-following (or reject `removed.png`) in `ImgurToSeaweedRehostService`, and move `updateOutfitLink` into a separate bean so its `@Transactional` actually applies.
 **Why:** Imgur redirects removed images to a placeholder, which the tool would rehost over the real link. The transaction annotation is currently ignored because of self-invocation.
 
 ### Cheaper Message Handling
@@ -99,12 +99,8 @@ Items 1–3 of that review (cross-server staff permissions, vote integrity, dele
 **What:** Drop `GUILD_MEMBERS` and `MemberCachePolicy.ALL` until a feature (welcome messages, member role) needs them.
 **Why:** Caching every member costs memory, and Discord requires extra verification for privileged intents once a bot is in more than 100 servers.
 
-### MinIO Bucket Setup
-**What:** Configure the bucket's public-read policy in code instead of assuming it, and create the bucket once at startup instead of calling `ensureBucketExists()` on every upload.
-**Why:** The public URL only works if the policy was set by hand, and every upload makes an extra round trip.
-
 ### Backups
-**What:** Scheduled backups of the Postgres and MinIO volumes, with a tested restore.
+**What:** Scheduled backups of the Postgres and SeaweedFS volumes, with a tested restore.
 **Why:** There are none today.
 
 ## Review: Features

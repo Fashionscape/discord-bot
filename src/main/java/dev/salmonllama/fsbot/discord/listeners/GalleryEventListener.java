@@ -8,8 +8,9 @@ import dev.salmonllama.fsbot.discord.components.ButtonHandler;
 import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.BlocklistService;
 import dev.salmonllama.fsbot.services.IdService;
+import dev.salmonllama.fsbot.services.OutfitService;
 import dev.salmonllama.fsbot.services.PermissionService;
-import dev.salmonllama.fsbot.storage.MinioStorageService;
+import dev.salmonllama.fsbot.storage.SeaweedStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.Member;
@@ -40,7 +41,8 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
 
     private final GalleryChannelRepository galleryChannelRepository;
     private final OutfitRepository outfitRepository;
-    private final MinioStorageService minioStorageService;
+    private final OutfitService outfitService;
+    private final SeaweedStorageService storageService;
     private final BlocklistService blocklistService;
     private final PermissionService permissionService;
     private final AuditService auditService;
@@ -48,14 +50,16 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
     public GalleryEventListener(
             GalleryChannelRepository galleryChannelRepository,
             OutfitRepository outfitRepository,
-            MinioStorageService minioStorageService,
+            OutfitService outfitService,
+            SeaweedStorageService storageService,
             BlocklistService blocklistService,
             PermissionService permissionService,
             AuditService auditService
     ) {
         this.galleryChannelRepository = galleryChannelRepository;
         this.outfitRepository = outfitRepository;
-        this.minioStorageService = minioStorageService;
+        this.outfitService = outfitService;
+        this.storageService = storageService;
         this.blocklistService = blocklistService;
         this.permissionService = permissionService;
         this.auditService = auditService;
@@ -106,7 +110,7 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
                 String outfitId = newOutfitId();
                 String sourceUrl = attachment.getUrl();
 
-                UploadResult uploadResult = minioStorageService.uploadOutfitFromUrl(outfitId, sourceUrl);
+                UploadResult uploadResult = storageService.uploadOutfitFromUrl(outfitId, sourceUrl);
 
                 String tag = gallery.getTag() != null && !gallery.getTag().isBlank() ? gallery.getTag() : "general";
                 String meta = event.getMessage().getContentRaw();
@@ -189,26 +193,25 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
     }
 
     private void handleUpvote(ButtonInteractionEvent event, String outfitId) {
-        Optional<OutfitEntity> outfitOpt = outfitRepository.findByIdAndDeletedFalse(outfitId);
+        Optional<OutfitService.VoteResult> result = outfitService.toggleVote(outfitId, event.getUser().getId());
 
-        if (outfitOpt.isEmpty()) {
+        if (result.isEmpty()) {
             event.reply("This outfit could not be found or has been removed.")
                     .setEphemeral(true)
                     .queue();
             return;
         }
 
-        OutfitEntity outfit = outfitOpt.get();
-        outfit.setDisplayCount(outfit.getDisplayCount() + 1);
-        outfit.setUpdated(Instant.now());
-        outfitRepository.save(outfit);
+        OutfitService.VoteResult vote = result.get();
+        String label = "Upvote (" + vote.voteCount() + ")";
+        List<Button> buttons = event.getMessage().getButtons().stream()
+                .map(button -> (UPVOTE_PREFIX + outfitId).equals(button.getId()) ? button.withLabel(label) : button)
+                .toList();
 
-        int updatedCount = outfit.getDisplayCount();
-        Button updatedUpvoteButton = Button.primary(UPVOTE_PREFIX + outfitId, "Upvote (" + updatedCount + ")");
-        Button deleteButton = Button.danger(DELETE_PREFIX + outfitId, "Delete");
-
-        event.editComponents(ActionRow.of(updatedUpvoteButton, deleteButton)).queue(
-                success -> event.getHook().sendMessage("Thanks for voting! (Outfit `" + outfitId + "` now has " + updatedCount + " votes)")
+        event.editComponents(ActionRow.of(buttons)).queue(
+                success -> event.getHook().sendMessage(vote.added()
+                                ? "Vote added. Outfit `" + outfitId + "` now has " + vote.voteCount() + " votes."
+                                : "Vote removed. Outfit `" + outfitId + "` now has " + vote.voteCount() + " votes.")
                         .setEphemeral(true)
                         .queue()
         );
@@ -235,12 +238,20 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
             return;
         }
 
-        outfit.setDeleted(true);
-        outfit.setUpdated(Instant.now());
-        outfitRepository.save(outfit);
-        auditService.record(event.getJDA(), AuditService.Action.OUTFIT_DELETED, userId,
-                event.getGuild() != null ? event.getGuild().getId() : null, AuditService.TARGET_OUTFIT, outfitId,
-                userId.equals(outfit.getSubmitter()) ? "Deleted by its submitter" : "Deleted by staff (submitter <@" + outfit.getSubmitter() + ">)");
+        try {
+            if (!outfitService.delete(outfitId, userId, event.getGuild() != null ? event.getGuild().getId() : null, event.getJDA())) {
+                event.reply("This outfit could not be found or has already been removed.")
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+        } catch (OutfitService.OutfitImageException e) {
+            logger.error("Failed to delete outfit {}", outfitId, e);
+            event.reply("This outfit could not be deleted because its image couldn't be moved. Nothing was changed; please try again.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
 
         EmbedBuilder deletedEmbed = new EmbedBuilder()
                 .setTitle("Outfit Removed")
