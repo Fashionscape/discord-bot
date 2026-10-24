@@ -2,7 +2,7 @@ package dev.salmonllama.fsbot.storage.migration;
 
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
-import dev.salmonllama.fsbot.storage.MinioStorageService;
+import dev.salmonllama.fsbot.storage.SeaweedStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,13 +25,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class ImgurToMinioRehostServiceTest {
+class ImgurToSeaweedRehostServiceTest {
 
     @Mock
     private OutfitRepository outfitRepository;
 
     @Mock
-    private MinioStorageService minioStorageService;
+    private SeaweedStorageService storageService;
 
     @Mock
     private HttpClient httpClient;
@@ -39,11 +39,11 @@ class ImgurToMinioRehostServiceTest {
     @Mock
     private HttpResponse<byte[]> httpResponse;
 
-    private ImgurToMinioRehostService rehostService;
+    private ImgurToSeaweedRehostService rehostService;
 
     @BeforeEach
     void setUp() {
-        rehostService = new ImgurToMinioRehostService(outfitRepository, minioStorageService, httpClient);
+        rehostService = new ImgurToSeaweedRehostService(outfitRepository, storageService, httpClient);
     }
 
     @Test
@@ -53,7 +53,7 @@ class ImgurToMinioRehostServiceTest {
 
         when(outfitRepository.findByLinkContaining("imgur.com")).thenReturn(List.of(outfit1, outfit2));
 
-        ImgurToMinioRehostService.RehostReport report = rehostService.rehostAll(true, 0, 0);
+        ImgurToSeaweedRehostService.RehostReport report = rehostService.rehostAll(true, 0, 0);
 
         assertEquals(2, report.totalFound());
         assertEquals(2, report.processed());
@@ -61,7 +61,7 @@ class ImgurToMinioRehostServiceTest {
         assertEquals(0, report.failed());
         assertTrue(report.dryRun());
         verify(outfitRepository, never()).save(any(OutfitEntity.class));
-        verifyNoInteractions(minioStorageService);
+        verifyNoInteractions(storageService);
     }
 
     @Test
@@ -76,13 +76,13 @@ class ImgurToMinioRehostServiceTest {
         when(httpResponse.headers()).thenReturn(headers);
         doReturn(httpResponse).when(httpClient).send(any(HttpRequest.class), any());
 
-        when(minioStorageService.resolveExtension("image/png", "https://i.imgur.com/test.png")).thenReturn("png");
-        when(minioStorageService.buildOutfitObjectName("id-100", "png")).thenReturn("outfits/id-100.png");
+        when(storageService.resolveExtension("image/png", "https://i.imgur.com/test.png")).thenReturn("png");
+        when(storageService.buildOutfitObjectName("id-100", "png")).thenReturn("outfits/id-100.png");
 
         UploadResult uploadResult = new UploadResult("outfits/id-100.png", "https://media.fashionscape.org/outfits/id-100.png", "fashionscape-outfits", fakeData.length, "image/png");
-        when(minioStorageService.upload(eq("outfits/id-100.png"), eq(fakeData), eq("image/png"))).thenReturn(uploadResult);
+        when(storageService.upload(eq("outfits/id-100.png"), eq(fakeData), eq("image/png"))).thenReturn(uploadResult);
 
-        ImgurToMinioRehostService.RehostReport report = rehostService.rehostAll(false, 0, 0);
+        ImgurToSeaweedRehostService.RehostReport report = rehostService.rehostAll(false, 0, 0);
 
         assertEquals(1, report.totalFound());
         assertEquals(1, report.succeeded());
@@ -99,7 +99,7 @@ class ImgurToMinioRehostServiceTest {
         when(httpResponse.statusCode()).thenReturn(404);
         doReturn(httpResponse).when(httpClient).send(any(HttpRequest.class), any());
 
-        ImgurToMinioRehostService.RehostReport report = rehostService.rehostAll(false, 0, 0);
+        ImgurToSeaweedRehostService.RehostReport report = rehostService.rehostAll(false, 0, 0);
 
         assertEquals(1, report.totalFound());
         assertEquals(0, report.succeeded());
@@ -118,7 +118,7 @@ class ImgurToMinioRehostServiceTest {
 
         when(httpClient.send(any(HttpRequest.class), any())).thenThrow(new IOException("Connection timed out"));
 
-        ImgurToMinioRehostService.RehostReport report = rehostService.rehostAll(false, 0, 0);
+        ImgurToSeaweedRehostService.RehostReport report = rehostService.rehostAll(false, 0, 0);
 
         assertEquals(1, report.totalFound());
         assertEquals(0, report.succeeded());
@@ -136,7 +136,7 @@ class ImgurToMinioRehostServiceTest {
 
         when(outfitRepository.findByLinkContaining("imgur.com")).thenReturn(new java.util.ArrayList<>(List.of(outfit1, outfit2, outfit3)));
 
-        ImgurToMinioRehostService.RehostReport report = rehostService.rehostAll(true, 2, 0);
+        ImgurToSeaweedRehostService.RehostReport report = rehostService.rehostAll(true, 2, 0);
 
         assertEquals(3, report.totalFound());
         assertEquals(2, report.processed());

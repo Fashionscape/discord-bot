@@ -36,7 +36,14 @@ dependencies {
     implementation 'org.xerial:sqlite-jdbc:3.46.1.0'
 
     // Object Storage
-    implementation 'io.minio:minio:8.5.12'
+    implementation platform('software.amazon.awssdk:bom:2.56.0')
+    implementation ('software.amazon.awssdk:s3') {
+        // Use the JDK-based HTTP client below. Spring Boot pins Apache HttpClient 5 older than
+        // apache5-client needs, and the Netty client is only for the async API we don't use.
+        exclude module: 'apache5-client'
+        exclude module: 'netty-nio-client'
+    }
+    implementation 'software.amazon.awssdk:url-connection-client'
 
     // Discord Library (JDA 5)
     implementation ('net.dv8tion:JDA:5.1.0') {
@@ -55,7 +62,6 @@ dependencies {
     testImplementation 'com.h2database:h2'
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'
-    testImplementation 'org.testcontainers:minio'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
@@ -65,4 +71,8 @@ application {
 
 tasks.named('test') {
     useJUnitPlatform()
+    testLogging {
+        // Print full stack traces in CI, where the HTML test report isn't kept
+        exceptionFormat = 'full'
+    }
 }

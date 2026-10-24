@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 @ConfigurationProperties(prefix = "fsbot")
 public record BotProperties(
         @DefaultValue DiscordProperties discord,
-        @DefaultValue MinioProperties minio
+        @DefaultValue SeaweedProperties seaweed
 ) {
     public record DiscordProperties(
             @DefaultValue("") String token,
@@ -15,10 +15,10 @@ public record BotProperties(
             @DefaultValue("") String homeGuildId
     ) {}
 
-    public record MinioProperties(
-            @DefaultValue("http://localhost:9000") String endpoint,
-            @DefaultValue("minioadmin") String accessKey,
-            @DefaultValue("minioadmin") String secretKey,
+    public record SeaweedProperties(
+            @DefaultValue("http://localhost:8333") String endpoint,
+            @DefaultValue("seaweedadmin") String accessKey,
+            @DefaultValue("seaweedadmin") String secretKey,
             @DefaultValue("fashionscape-outfits") String bucket,
             @DefaultValue("https://media.fashionscape.org") String publicUrl
     ) {}

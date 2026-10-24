@@ -6,18 +6,18 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 @Component
-public class ImgurToMinioRehostCli implements CommandLineRunner {
+public class ImgurToSeaweedRehostCli implements CommandLineRunner {
 
-    private static final Logger logger = LoggerFactory.getLogger(ImgurToMinioRehostCli.class);
+    private static final Logger logger = LoggerFactory.getLogger(ImgurToSeaweedRehostCli.class);
 
     private static final String REHOST_FLAG = "--rehost-imgur";
     private static final String DRY_RUN_FLAG = "--dry-run";
     private static final String LIMIT_PREFIX = "--rehost-limit=";
     private static final String DELAY_PREFIX = "--rehost-delay=";
 
-    private final ImgurToMinioRehostService rehostService;
+    private final ImgurToSeaweedRehostService rehostService;
 
-    public ImgurToMinioRehostCli(ImgurToMinioRehostService rehostService) {
+    public ImgurToSeaweedRehostCli(ImgurToSeaweedRehostService rehostService) {
         this.rehostService = rehostService;
     }
 
@@ -63,7 +63,7 @@ public class ImgurToMinioRehostCli implements CommandLineRunner {
 
         if (shouldRun) {
             logger.info("=================================================");
-            logger.info("Executing Imgur-to-MinIO Image Rehost CLI");
+            logger.info("Executing Imgur-to-SeaweedFS Image Rehost CLI");
             logger.info("Mode: {}", dryRun ? "DRY RUN" : "LIVE MIGRATION");
             if (limit > 0) {
                 logger.info("Limit: {} outfits", limit);
@@ -71,7 +71,7 @@ public class ImgurToMinioRehostCli implements CommandLineRunner {
             logger.info("Delay: {} ms", delayMillis);
             logger.info("=================================================");
 
-            ImgurToMinioRehostService.RehostReport report = rehostService.rehostAll(dryRun, limit, delayMillis);
+            ImgurToSeaweedRehostService.RehostReport report = rehostService.rehostAll(dryRun, limit, delayMillis);
 
             logger.info("=================================================");
             logger.info("Migration Summary Report:");
@@ -82,7 +82,7 @@ public class ImgurToMinioRehostCli implements CommandLineRunner {
             logger.info("  Skipped:     {}", report.skipped());
             if (!report.failures().isEmpty()) {
                 logger.warn("Encountered {} failure(s):", report.failures().size());
-                for (ImgurToMinioRehostService.RehostReport.RehostFailure failure : report.failures()) {
+                for (ImgurToSeaweedRehostService.RehostReport.RehostFailure failure : report.failures()) {
                     logger.warn("  - Outfit {}: {} (Reason: {})", failure.outfitId(), failure.sourceUrl(), failure.reason());
                 }
             }

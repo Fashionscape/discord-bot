@@ -1,15 +1,17 @@
 package dev.salmonllama.fsbot.storage;
 
 import dev.salmonllama.fsbot.config.BotProperties;
-import io.minio.*;
-import io.minio.errors.ErrorResponseException;
-import io.minio.messages.ErrorResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.InputStream;
 import java.net.http.HttpClient;
@@ -23,10 +25,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class MinioStorageServiceTest {
+class SeaweedStorageServiceTest {
 
     @Mock
-    private MinioClient minioClient;
+    private S3Client s3Client;
 
     @Mock
     private HttpClient httpClient;
@@ -35,47 +37,45 @@ class MinioStorageServiceTest {
     private HttpResponse<byte[]> httpResponse;
 
     private BotProperties properties;
-    private MinioStorageService storageService;
+    private SeaweedStorageService storageService;
 
     @BeforeEach
     void setUp() {
         properties = new BotProperties(
                 new BotProperties.DiscordProperties("test-token", 123456L, "guild-1", ""),
-                new BotProperties.MinioProperties(
-                        "http://localhost:9000",
-                        "minioadmin",
-                        "minioadmin",
+                new BotProperties.SeaweedProperties(
+                        "http://localhost:8333",
+                        "seaweedadmin",
+                        "seaweedadmin",
                         "test-bucket",
                         "https://media.fashionscape.org"
                 )
         );
 
-        storageService = new MinioStorageService(minioClient, properties, httpClient);
+        storageService = new SeaweedStorageService(s3Client, properties, httpClient);
     }
 
     @Test
     void ensureBucketExistsCreatesBucketWhenMissing() throws Exception {
-        when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(false);
+        when(s3Client.headBucket(any(HeadBucketRequest.class))).thenThrow(NoSuchBucketException.builder().build());
 
         storageService.ensureBucketExists();
 
-        verify(minioClient).bucketExists(any(BucketExistsArgs.class));
-        verify(minioClient).makeBucket(any(MakeBucketArgs.class));
+        ArgumentCaptor<CreateBucketRequest> captor = ArgumentCaptor.forClass(CreateBucketRequest.class);
+        verify(s3Client).createBucket(captor.capture());
+        assertEquals("test-bucket", captor.getValue().bucket());
     }
 
     @Test
     void ensureBucketExistsDoesNotCreateBucketWhenPresent() throws Exception {
-        when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
-
         storageService.ensureBucketExists();
 
-        verify(minioClient).bucketExists(any(BucketExistsArgs.class));
-        verify(minioClient, never()).makeBucket(any(MakeBucketArgs.class));
+        verify(s3Client).headBucket(any(HeadBucketRequest.class));
+        verify(s3Client, never()).createBucket(any(CreateBucketRequest.class));
     }
 
     @Test
     void uploadBytesSuccessfullyPutsObject() throws Exception {
-        when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
         byte[] payload = "test-image-content".getBytes(StandardCharsets.UTF_8);
 
         UploadResult result = storageService.upload("outfits/outfit-1.png", payload, "image/png");
@@ -87,17 +87,30 @@ class MinioStorageServiceTest {
         assertEquals("image/png", result.contentType());
         assertEquals("https://media.fashionscape.org/outfits/outfit-1.png", result.publicUrl());
 
-        ArgumentCaptor<PutObjectArgs> captor = ArgumentCaptor.forClass(PutObjectArgs.class);
-        verify(minioClient).putObject(captor.capture());
-        PutObjectArgs putArgs = captor.getValue();
-        assertEquals("test-bucket", putArgs.bucket());
-        assertEquals("outfits/outfit-1.png", putArgs.object());
-        assertEquals("image/png", putArgs.contentType());
+        ArgumentCaptor<PutObjectRequest> request = ArgumentCaptor.forClass(PutObjectRequest.class);
+        ArgumentCaptor<RequestBody> body = ArgumentCaptor.forClass(RequestBody.class);
+        verify(s3Client).putObject(request.capture(), body.capture());
+        assertEquals("test-bucket", request.getValue().bucket());
+        assertEquals("outfits/outfit-1.png", request.getValue().key());
+        assertEquals("image/png", request.getValue().contentType());
+        assertEquals(Optional.of((long) payload.length), body.getValue().optionalContentLength());
+    }
+
+    @Test
+    void uploadStreamOfUnknownLengthIsBufferedFirst() throws Exception {
+        byte[] payload = new byte[]{9, 8, 7};
+
+        UploadResult result = storageService.upload("outfits/s.png", new java.io.ByteArrayInputStream(payload), -1, null);
+
+        assertEquals(3, result.size());
+        assertEquals("application/octet-stream", result.contentType());
+        ArgumentCaptor<RequestBody> body = ArgumentCaptor.forClass(RequestBody.class);
+        verify(s3Client).putObject(any(PutObjectRequest.class), body.capture());
+        assertEquals(Optional.of(3L), body.getValue().optionalContentLength());
     }
 
     @Test
     void uploadOutfitNamesObjectCorrectly() throws Exception {
-        when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
         byte[] payload = "image-bytes".getBytes(StandardCharsets.UTF_8);
 
         UploadResult result = storageService.uploadOutfit("abc-123", payload, "image/jpeg");
@@ -108,8 +121,6 @@ class MinioStorageServiceTest {
 
     @Test
     void uploadOutfitFromUrlDownloadsAndUploads() throws Exception {
-        when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
-
         byte[] fakeImage = new byte[]{1, 2, 3, 4};
         when(httpResponse.statusCode()).thenReturn(200);
         when(httpResponse.body()).thenReturn(fakeImage);
@@ -126,42 +137,54 @@ class MinioStorageServiceTest {
         assertNotNull(result);
         assertEquals("outfits/test-outfit.png", result.objectName());
         assertEquals("https://media.fashionscape.org/outfits/test-outfit.png", result.publicUrl());
-        verify(minioClient).putObject(any(PutObjectArgs.class));
+        verify(s3Client).putObject(any(PutObjectRequest.class), any(RequestBody.class));
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void getObjectReturnsStream() throws Exception {
-        GetObjectResponse mockStream = mock(GetObjectResponse.class);
-        when(minioClient.getObject(any(GetObjectArgs.class))).thenReturn(mockStream);
+        ResponseInputStream<GetObjectResponse> mockStream = mock(ResponseInputStream.class);
+        when(s3Client.getObject(any(GetObjectRequest.class))).thenReturn(mockStream);
 
         InputStream result = storageService.getObject("outfits/test.png");
+
         assertSame(mockStream, result);
+        ArgumentCaptor<GetObjectRequest> captor = ArgumentCaptor.forClass(GetObjectRequest.class);
+        verify(s3Client).getObject(captor.capture());
+        assertEquals("outfits/test.png", captor.getValue().key());
     }
 
     @Test
-    void objectExistsReturnsTrueWhenPresent() throws Exception {
-        StatObjectResponse stat = mock(StatObjectResponse.class);
-        when(minioClient.statObject(any(StatObjectArgs.class))).thenReturn(stat);
+    void objectExistsReturnsTrueWhenPresent() {
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder().build());
 
         assertTrue(storageService.objectExists("outfits/present.png"));
     }
 
     @Test
-    void objectExistsReturnsFalseWhenNoSuchKey() throws Exception {
-        ErrorResponse err = mock(ErrorResponse.class);
-        when(err.code()).thenReturn("NoSuchKey");
-        ErrorResponseException exception = mock(ErrorResponseException.class);
-        when(exception.errorResponse()).thenReturn(err);
-
-        when(minioClient.statObject(any(StatObjectArgs.class))).thenThrow(exception);
+    void objectExistsReturnsFalseWhenNoSuchKey() {
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenThrow(NoSuchKeyException.builder().build());
 
         assertFalse(storageService.objectExists("outfits/missing.png"));
     }
 
     @Test
-    void deleteObjectCallsRemoveObject() throws Exception {
+    void objectExistsReturnsFalseOnPlain404() {
+        // HEAD responses have no body, so some servers' 404s arrive as a plain S3Exception
+        when(s3Client.headObject(any(HeadObjectRequest.class)))
+                .thenThrow(S3Exception.builder().statusCode(404).build());
+
+        assertFalse(storageService.objectExists("outfits/missing.png"));
+    }
+
+    @Test
+    void deleteObjectDeletesKey() throws Exception {
         storageService.deleteObject("outfits/deleted.png");
-        verify(minioClient).removeObject(any(RemoveObjectArgs.class));
+
+        ArgumentCaptor<DeleteObjectRequest> captor = ArgumentCaptor.forClass(DeleteObjectRequest.class);
+        verify(s3Client).deleteObject(captor.capture());
+        assertEquals("test-bucket", captor.getValue().bucket());
+        assertEquals("outfits/deleted.png", captor.getValue().key());
     }
 
     @Test
@@ -197,79 +220,76 @@ class MinioStorageServiceTest {
 
     @Test
     void prepareBucketLimitsPublicReadToOutfits() throws Exception {
-        when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
-
         storageService.prepareBucket();
 
-        ArgumentCaptor<SetBucketPolicyArgs> captor = ArgumentCaptor.forClass(SetBucketPolicyArgs.class);
-        verify(minioClient).setBucketPolicy(captor.capture());
-        String policy = captor.getValue().config();
+        ArgumentCaptor<PutBucketPolicyRequest> captor = ArgumentCaptor.forClass(PutBucketPolicyRequest.class);
+        verify(s3Client).putBucketPolicy(captor.capture());
+        assertEquals("test-bucket", captor.getValue().bucket());
+        String policy = captor.getValue().policy();
         assertTrue(policy.contains("\"arn:aws:s3:::test-bucket/outfits/*\""), policy);
         assertTrue(policy.contains("s3:GetObject"));
         assertFalse(policy.contains("deleted/"));
     }
 
     @Test
-    void initializeBucketDoesNotThrowWhenMinioIsDown() throws Exception {
-        when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenThrow(new java.io.IOException("connection refused"));
+    void initializeBucketDoesNotThrowWhenSeaweedIsDown() {
+        when(s3Client.headBucket(any(HeadBucketRequest.class)))
+                .thenThrow(SdkClientException.create("connection refused"));
 
         assertDoesNotThrow(() -> storageService.initializeBucket());
     }
 
     @Test
     void uploadPreparesBucketOnlyOnce() throws Exception {
-        when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
-
         storageService.upload("outfits/a.png", new byte[]{1}, "image/png");
         storageService.upload("outfits/b.png", new byte[]{2}, "image/png");
 
-        verify(minioClient, times(1)).bucketExists(any(BucketExistsArgs.class));
-        verify(minioClient, times(1)).setBucketPolicy(any(SetBucketPolicyArgs.class));
-        verify(minioClient, times(2)).putObject(any(PutObjectArgs.class));
+        verify(s3Client, times(1)).headBucket(any(HeadBucketRequest.class));
+        verify(s3Client, times(1)).putBucketPolicy(any(PutBucketPolicyRequest.class));
+        verify(s3Client, times(2)).putObject(any(PutObjectRequest.class), any(RequestBody.class));
     }
 
     @Test
     void quarantineCopiesToDeletedPrefixThenRemovesOriginal() throws Exception {
-        when(minioClient.statObject(any(StatObjectArgs.class))).thenReturn(mock(StatObjectResponse.class));
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder().build());
 
         assertEquals("deleted/outfits/x.png", storageService.quarantine("outfits/x.png"));
 
-        ArgumentCaptor<CopyObjectArgs> copy = ArgumentCaptor.forClass(CopyObjectArgs.class);
-        ArgumentCaptor<RemoveObjectArgs> remove = ArgumentCaptor.forClass(RemoveObjectArgs.class);
-        var order = inOrder(minioClient);
-        order.verify(minioClient).copyObject(copy.capture());
-        order.verify(minioClient).removeObject(remove.capture());
-        assertEquals("deleted/outfits/x.png", copy.getValue().object());
-        assertEquals("outfits/x.png", copy.getValue().source().object());
-        assertEquals("outfits/x.png", remove.getValue().object());
+        ArgumentCaptor<CopyObjectRequest> copy = ArgumentCaptor.forClass(CopyObjectRequest.class);
+        ArgumentCaptor<DeleteObjectRequest> delete = ArgumentCaptor.forClass(DeleteObjectRequest.class);
+        var order = inOrder(s3Client);
+        order.verify(s3Client).copyObject(copy.capture());
+        order.verify(s3Client).deleteObject(delete.capture());
+        assertEquals("test-bucket", copy.getValue().sourceBucket());
+        assertEquals("outfits/x.png", copy.getValue().sourceKey());
+        assertEquals("test-bucket", copy.getValue().destinationBucket());
+        assertEquals("deleted/outfits/x.png", copy.getValue().destinationKey());
+        assertEquals("outfits/x.png", delete.getValue().key());
     }
 
     @Test
     void quarantineIsSafeToRepeat() throws Exception {
-        ErrorResponse err = mock(ErrorResponse.class);
-        when(err.code()).thenReturn("NoSuchKey");
-        ErrorResponseException missing = mock(ErrorResponseException.class);
-        when(missing.errorResponse()).thenReturn(err);
-        when(minioClient.statObject(argThat((StatObjectArgs a) -> a != null && a.object().equals("outfits/x.png")))).thenThrow(missing);
-        when(minioClient.statObject(argThat((StatObjectArgs a) -> a != null && a.object().equals("deleted/outfits/x.png"))))
-                .thenReturn(mock(StatObjectResponse.class));
+        when(s3Client.headObject(argThat((HeadObjectRequest r) -> r != null && r.key().equals("outfits/x.png"))))
+                .thenThrow(NoSuchKeyException.builder().build());
+        when(s3Client.headObject(argThat((HeadObjectRequest r) -> r != null && r.key().equals("deleted/outfits/x.png"))))
+                .thenReturn(HeadObjectResponse.builder().build());
 
         storageService.quarantine("outfits/x.png");
 
-        verify(minioClient, never()).copyObject(any());
-        verify(minioClient, never()).removeObject(any());
+        verify(s3Client, never()).copyObject(any(CopyObjectRequest.class));
+        verify(s3Client, never()).deleteObject(any(DeleteObjectRequest.class));
     }
 
     @Test
     void releaseMovesImageBack() throws Exception {
-        when(minioClient.statObject(any(StatObjectArgs.class))).thenReturn(mock(StatObjectResponse.class));
+        when(s3Client.headObject(any(HeadObjectRequest.class))).thenReturn(HeadObjectResponse.builder().build());
 
         storageService.release("outfits/x.png");
 
-        ArgumentCaptor<CopyObjectArgs> copy = ArgumentCaptor.forClass(CopyObjectArgs.class);
-        verify(minioClient).copyObject(copy.capture());
-        assertEquals("outfits/x.png", copy.getValue().object());
-        assertEquals("deleted/outfits/x.png", copy.getValue().source().object());
+        ArgumentCaptor<CopyObjectRequest> copy = ArgumentCaptor.forClass(CopyObjectRequest.class);
+        verify(s3Client).copyObject(copy.capture());
+        assertEquals("deleted/outfits/x.png", copy.getValue().sourceKey());
+        assertEquals("outfits/x.png", copy.getValue().destinationKey());
     }
 
     @Test

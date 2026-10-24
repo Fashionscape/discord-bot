@@ -1,9 +1,8 @@
 package dev.salmonllama.fsbot.integration;
 
 import dev.salmonllama.fsbot.config.BotProperties;
-import dev.salmonllama.fsbot.storage.MinioStorageService;
+import dev.salmonllama.fsbot.storage.SeaweedStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
-import io.minio.MinioClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,7 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MinIOContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -26,38 +24,35 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
 @SpringBootTest
-class MinioIntegrationTest {
+class SeaweedIntegrationTest {
 
     @Container
-    static MinIOContainer minio = MinioTestContainer.create();
+    static SeaweedContainer seaweed = new SeaweedContainer();
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("fsbot.minio.endpoint", minio::getS3URL);
-        registry.add("fsbot.minio.access-key", minio::getUserName);
-        registry.add("fsbot.minio.secret-key", minio::getPassword);
-        registry.add("fsbot.minio.bucket", () -> "fsbot-integration-test");
-        registry.add("fsbot.minio.public-url", () -> "https://media.fashionscape.org");
+        registry.add("fsbot.seaweed.endpoint", seaweed::getS3URL);
+        registry.add("fsbot.seaweed.access-key", seaweed::getAccessKey);
+        registry.add("fsbot.seaweed.secret-key", seaweed::getSecretKey);
+        registry.add("fsbot.seaweed.bucket", () -> "fsbot-integration-test");
+        registry.add("fsbot.seaweed.public-url", () -> "https://media.fashionscape.org");
         registry.add("fsbot.discord.token", () -> "");
     }
 
     @Autowired
-    private MinioStorageService minioStorageService;
-
-    @Autowired
-    private MinioClient minioClient;
+    private SeaweedStorageService storageService;
 
     @Autowired
     private BotProperties properties;
 
     @BeforeEach
     void setUp() throws Exception {
-        minioStorageService.prepareBucket();
+        storageService.prepareBucket();
     }
 
     private int anonymousGetStatus(String objectName) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(minio.getS3URL() + "/fsbot-integration-test/" + objectName))
+                .uri(URI.create(seaweed.getS3URL() + "/fsbot-integration-test/" + objectName))
                 .GET()
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
@@ -67,34 +62,34 @@ class MinioIntegrationTest {
     @DisplayName("Only outfits/ is publicly readable; quarantined images are not")
     void testQuarantineRemovesPublicAccess() throws Exception {
         byte[] image = new byte[]{ (byte) 0x89, 0x50, 0x4E, 0x47 };
-        minioStorageService.uploadOutfit("outfit-q-1", image, "image/png");
+        storageService.uploadOutfit("outfit-q-1", image, "image/png");
         assertEquals(200, anonymousGetStatus("outfits/outfit-q-1.png"));
 
-        String quarantined = minioStorageService.quarantine("outfits/outfit-q-1.png");
+        String quarantined = storageService.quarantine("outfits/outfit-q-1.png");
         assertEquals("deleted/outfits/outfit-q-1.png", quarantined);
-        assertFalse(minioStorageService.objectExists("outfits/outfit-q-1.png"));
-        assertArrayEquals(image, minioStorageService.getObjectBytes(quarantined));
+        assertFalse(storageService.objectExists("outfits/outfit-q-1.png"));
+        assertArrayEquals(image, storageService.getObjectBytes(quarantined));
         assertEquals(403, anonymousGetStatus(quarantined));
 
         // Repeating the move is harmless
-        minioStorageService.quarantine("outfits/outfit-q-1.png");
-        assertTrue(minioStorageService.objectExists(quarantined));
+        storageService.quarantine("outfits/outfit-q-1.png");
+        assertTrue(storageService.objectExists(quarantined));
 
-        minioStorageService.release("outfits/outfit-q-1.png");
+        storageService.release("outfits/outfit-q-1.png");
         assertEquals(200, anonymousGetStatus("outfits/outfit-q-1.png"));
-        assertFalse(minioStorageService.objectExists(quarantined));
+        assertFalse(storageService.objectExists(quarantined));
 
-        minioStorageService.deleteObject("outfits/outfit-q-1.png");
+        storageService.deleteObject("outfits/outfit-q-1.png");
     }
 
     @Test
-    @DisplayName("Verify MinIO bucket initialization, upload, retrieve, and delete against real MinIO container")
-    void testMinioLifecycle() throws Exception {
-        byte[] payload = "Hello MinIO Integration Test!".getBytes(StandardCharsets.UTF_8);
+    @DisplayName("Verify bucket initialization, upload, retrieve, and delete against real SeaweedFS container")
+    void testStorageLifecycle() throws Exception {
+        byte[] payload = "Hello SeaweedFS Integration Test!".getBytes(StandardCharsets.UTF_8);
         String objectName = "test/integration-file.txt";
 
         // 1. Upload object
-        UploadResult result = minioStorageService.upload(objectName, payload, "text/plain");
+        UploadResult result = storageService.upload(objectName, payload, "text/plain");
         assertNotNull(result);
         assertEquals(objectName, result.objectName());
         assertEquals("fsbot-integration-test", result.bucket());
@@ -102,22 +97,22 @@ class MinioIntegrationTest {
         assertEquals("https://media.fashionscape.org/" + objectName, result.publicUrl());
 
         // 2. Check object existence
-        assertTrue(minioStorageService.objectExists(objectName));
-        assertFalse(minioStorageService.objectExists("nonexistent-file.png"));
+        assertTrue(storageService.objectExists(objectName));
+        assertFalse(storageService.objectExists("nonexistent-file.png"));
 
         // 3. Read object bytes back and verify content
-        byte[] retrievedBytes = minioStorageService.getObjectBytes(objectName);
+        byte[] retrievedBytes = storageService.getObjectBytes(objectName);
         assertArrayEquals(payload, retrievedBytes);
 
         // 4. Stream object and verify content
-        try (InputStream stream = minioStorageService.getObject(objectName)) {
+        try (InputStream stream = storageService.getObject(objectName)) {
             byte[] streamedBytes = stream.readAllBytes();
             assertArrayEquals(payload, streamedBytes);
         }
 
         // 5. Delete object
-        minioStorageService.deleteObject(objectName);
-        assertFalse(minioStorageService.objectExists(objectName));
+        storageService.deleteObject(objectName);
+        assertFalse(storageService.objectExists(objectName));
     }
 
     @Test
@@ -126,19 +121,19 @@ class MinioIntegrationTest {
         byte[] fakePng = new byte[]{ (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
         String outfitId = "outfit-tc-99";
 
-        UploadResult result = minioStorageService.uploadOutfit(outfitId, fakePng, "image/png");
+        UploadResult result = storageService.uploadOutfit(outfitId, fakePng, "image/png");
         assertNotNull(result);
         assertEquals("outfits/outfit-tc-99.png", result.objectName());
         assertEquals("https://media.fashionscape.org/outfits/outfit-tc-99.png", result.publicUrl());
 
-        assertTrue(minioStorageService.objectExists("outfits/outfit-tc-99.png"));
+        assertTrue(storageService.objectExists("outfits/outfit-tc-99.png"));
 
         // Extract key from public URL
-        var key = minioStorageService.extractObjectKey(result.publicUrl());
+        var key = storageService.extractObjectKey(result.publicUrl());
         assertTrue(key.isPresent());
         assertEquals("outfits/outfit-tc-99.png", key.get());
 
         // Clean up
-        minioStorageService.deleteObject("outfits/outfit-tc-99.png");
+        storageService.deleteObject("outfits/outfit-tc-99.png");
     }
 }

@@ -12,16 +12,16 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class ImgurToMinioRehostCliTest {
+class ImgurToSeaweedRehostCliTest {
 
     @Mock
-    private ImgurToMinioRehostService rehostService;
+    private ImgurToSeaweedRehostService rehostService;
 
-    private ImgurToMinioRehostCli cli;
+    private ImgurToSeaweedRehostCli cli;
 
     @BeforeEach
     void setUp() {
-        cli = new ImgurToMinioRehostCli(rehostService);
+        cli = new ImgurToSeaweedRehostCli(rehostService);
     }
 
     @Test
@@ -33,7 +33,7 @@ class ImgurToMinioRehostCliTest {
     @Test
     void runExecutesWhenRehostFlagProvided() throws Exception {
         when(rehostService.rehostAll(anyBoolean(), anyInt(), anyLong()))
-                .thenReturn(new ImgurToMinioRehostService.RehostReport(0, 0, 0, 0, 0, false, List.of()));
+                .thenReturn(new ImgurToSeaweedRehostService.RehostReport(0, 0, 0, 0, 0, false, List.of()));
 
         cli.run("--rehost-imgur");
         verify(rehostService).rehostAll(eq(false), eq(0), eq(100L));
@@ -42,7 +42,7 @@ class ImgurToMinioRehostCliTest {
     @Test
     void runExecutesDryRunWhenFlagSpecified() throws Exception {
         when(rehostService.rehostAll(anyBoolean(), anyInt(), anyLong()))
-                .thenReturn(new ImgurToMinioRehostService.RehostReport(0, 0, 0, 0, 0, false, List.of()));
+                .thenReturn(new ImgurToSeaweedRehostService.RehostReport(0, 0, 0, 0, 0, false, List.of()));
 
         cli.run("--rehost-imgur=dry-run");
         verify(rehostService).rehostAll(eq(true), eq(0), eq(100L));
@@ -51,7 +51,7 @@ class ImgurToMinioRehostCliTest {
     @Test
     void runParsesLimitAndDelayArguments() throws Exception {
         when(rehostService.rehostAll(anyBoolean(), anyInt(), anyLong()))
-                .thenReturn(new ImgurToMinioRehostService.RehostReport(0, 0, 0, 0, 0, false, List.of()));
+                .thenReturn(new ImgurToSeaweedRehostService.RehostReport(0, 0, 0, 0, 0, false, List.of()));
 
         cli.run("--rehost-imgur", "--dry-run", "--rehost-limit=25", "--rehost-delay=50");
         verify(rehostService).rehostAll(eq(true), eq(25), eq(50L));

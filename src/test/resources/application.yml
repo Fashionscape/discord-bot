@@ -20,5 +20,5 @@ fsbot:
   discord:
     token: ""
     owner-id: 123456789
-  minio:
-    endpoint: http://localhost:9000
+  seaweed:
+    endpoint: http://localhost:8333

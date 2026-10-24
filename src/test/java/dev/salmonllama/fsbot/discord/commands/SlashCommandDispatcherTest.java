@@ -67,7 +67,7 @@ class SlashCommandDispatcherTest {
 
         properties = new BotProperties(
                 new BotProperties.DiscordProperties("test-token", 123456789L, "", ""),
-                new BotProperties.MinioProperties("http://localhost:9000", "key", "secret", "bucket", "https://cdn.example.com")
+                new BotProperties.SeaweedProperties("http://localhost:8333", "key", "secret", "bucket", "https://cdn.example.com")
         );
 
         dispatcher = new SlashCommandDispatcher(
