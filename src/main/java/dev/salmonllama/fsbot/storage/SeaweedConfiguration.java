@@ -10,7 +10,6 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.checksums.RequestChecksumCalculation;
 import software.amazon.awssdk.core.checksums.ResponseChecksumValidation;
-import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
@@ -28,7 +27,6 @@ public class SeaweedConfiguration {
         logger.info("Configuring S3 client for SeaweedFS endpoint: {}", seaweedProps.endpoint());
 
         return S3Client.builder()
-                .httpClientBuilder(UrlConnectionHttpClient.builder())
                 .endpointOverride(URI.create(seaweedProps.endpoint()))
                 // SeaweedFS ignores the region, but the SDK requires one to sign requests
                 .region(Region.US_EAST_1)

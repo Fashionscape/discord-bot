@@ -28,7 +28,7 @@ The client is configured for a self-hosted S3 gateway (`SeaweedConfiguration`):
 - `endpointOverride` points at `SEAWEED_ENDPOINT`, and `forcePathStyle(true)` addresses buckets as `/{bucket}/{key}`.
 - The region is fixed to `us-east-1`. SeaweedFS ignores it, but the SDK needs one to sign requests.
 - Checksums are calculated and validated only when an operation requires them (`WHEN_REQUIRED`). Since SDK 2.30 the default adds CRC checksum headers to every upload, which third-party S3 servers don't all accept.
-- It uses the SDK's JDK-based `url-connection-client`. The default Apache HttpClient 5 transport needs a newer HttpClient than Spring Boot 3.3 manages, and the Netty transport is only for the async API, so both are excluded in `build.gradle`.
+- It uses the SDK's default Apache HttpClient 5 transport (`apache5-client`). The Netty transport is only for the async API, so it is excluded in `build.gradle`. (Under Spring Boot 3.3 the Apache transport was excluded too, in favour of the JDK-based `url-connection-client`, because Boot 3.3 managed an HttpClient 5 older than the SDK needs. Spring Boot 4.1 manages a new enough one.)
 
 Name configuration after the server, not the client:
 
