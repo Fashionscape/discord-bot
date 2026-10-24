@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -99,20 +100,11 @@ class OutfitPipelineIntegrationTest {
         galleryChannelRepository.save(galleryChannel);
         assertTrue(galleryChannelRepository.existsByChannelIdAndEnabledTrue(channelId));
 
-        // 2. Upload outfit image to SeaweedFS
-        String outfitId = "fit-pipeline-1";
-        byte[] imageBytes = "fake-png-image-content".getBytes(StandardCharsets.UTF_8);
-        UploadResult uploadResult = storageService.uploadOutfit(outfitId, imageBytes, "image/png");
-
-        assertNotNull(uploadResult);
-        assertEquals("outfits/fit-pipeline-1.png", uploadResult.objectName());
-        assertTrue(storageService.objectExists("outfits/fit-pipeline-1.png"));
-
-        // 3. Save outfit entity in PostgreSQL
+        // 2. Save outfit entity in PostgreSQL, which generates its UUID
         String submitterId = "user-999";
-        OutfitEntity outfitEntity = new OutfitEntity(
-                outfitId,
-                uploadResult.publicUrl(),
+        OutfitEntity outfitEntity = outfitRepository.save(new OutfitEntity(
+                null,
+                "https://cdn.discordapp.com/attachments/1/2/pic.png",
                 submitterId,
                 galleryChannel.getTag(),
                 "Retro dragon armor outfit",
@@ -125,7 +117,20 @@ class OutfitPipelineIntegrationTest {
                 null,
                 "server-1",
                 "channel-1"
-        );
+        ));
+        UUID outfitId = outfitEntity.getId();
+        assertNotNull(outfitId);
+        String imageKey = "outfits/" + outfitId + ".png";
+
+        // 3. Upload outfit image to SeaweedFS under that ID
+        byte[] imageBytes = "fake-png-image-content".getBytes(StandardCharsets.UTF_8);
+        UploadResult uploadResult = storageService.uploadOutfit(outfitId.toString(), imageBytes, "image/png");
+
+        assertNotNull(uploadResult);
+        assertEquals(imageKey, uploadResult.objectName());
+        assertTrue(storageService.objectExists(imageKey));
+
+        outfitEntity.setLink(uploadResult.publicUrl());
         outfitRepository.save(outfitEntity);
 
         // 4. Query and verify entity from PostgreSQL
@@ -145,7 +150,7 @@ class OutfitPipelineIntegrationTest {
         assertArrayEquals(imageBytes, readBackBytes);
 
         // 5. Upvote: one vote per user, counted in PostgreSQL
-        assertEquals(Optional.of(new OutfitService.VoteResult(true, 1)), outfitService.toggleVote(outfitId, "voter-1"));
+        assertEquals(Optional.of(new OutfitService.VoteResult(true, 1)), outfitService.toggleVote(outfitId.toString(), "voter-1"));
 
         OutfitEntity upvoted = outfitRepository.findByIdAndDeletedFalse(outfitId).orElseThrow();
         assertEquals(1, upvoted.getVoteCount());
@@ -160,7 +165,7 @@ class OutfitPipelineIntegrationTest {
         assertEquals(outfitId, userMatches.getFirst().getId());
 
         // 7. Delete outfit: the image moves out of public read and the outfit is marked deleted
-        assertTrue(outfitService.delete(outfitId, submitterId, guildId, null));
+        assertTrue(outfitService.delete(outfitId.toString(), submitterId, guildId, null));
 
         // Verify it is no longer returned in active queries
         assertTrue(outfitRepository.findByIdAndDeletedFalse(outfitId).isEmpty());
@@ -172,18 +177,28 @@ class OutfitPipelineIntegrationTest {
         assertNotNull(deleted.getDeletedAt());
 
         // The image is kept, but only under the quarantine prefix
-        assertFalse(storageService.objectExists("outfits/fit-pipeline-1.png"));
-        assertTrue(storageService.objectExists("deleted/outfits/fit-pipeline-1.png"));
+        assertFalse(storageService.objectExists(imageKey));
+        assertTrue(storageService.objectExists("deleted/" + imageKey));
         assertArrayEquals(imageBytes, outfitService.getDeletedImage(deleted).orElseThrow().data());
 
         // 8. Restore moves it back
-        assertTrue(outfitService.restore(outfitId, "staff-1", guildId, null));
+        assertTrue(outfitService.restore(outfitId.toString(), "staff-1", guildId, null));
         assertTrue(outfitRepository.findByIdAndDeletedFalse(outfitId).isPresent());
-        assertTrue(storageService.objectExists("outfits/fit-pipeline-1.png"));
-        assertFalse(storageService.objectExists("deleted/outfits/fit-pipeline-1.png"));
+        assertTrue(storageService.objectExists(imageKey));
+        assertFalse(storageService.objectExists("deleted/" + imageKey));
 
         // Clean up SeaweedFS object
-        storageService.deleteObject("outfits/fit-pipeline-1.png");
-        assertFalse(storageService.objectExists("outfits/fit-pipeline-1.png"));
+        storageService.deleteObject(imageKey);
+        assertFalse(storageService.objectExists(imageKey));
+    }
+
+    @Test
+    @DisplayName("A failed image upload leaves no outfit row behind")
+    void testFailedUploadWritesNoOutfit() {
+        OutfitEntity outfit = new OutfitEntity(null, "http://localhost:1/missing.png", "user-999", "retro", null,
+                "RetroWarrior", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+
+        assertThrows(Exception.class, () -> outfitService.submit(outfit, "http://localhost:1/missing.png"));
+        assertEquals(0, outfitRepository.count());
     }
 }

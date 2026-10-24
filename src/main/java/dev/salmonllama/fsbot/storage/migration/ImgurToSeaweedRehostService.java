@@ -67,7 +67,7 @@ public class ImgurToSeaweedRehostService {
             OutfitEntity outfit = outfits.get(i);
             processed++;
             String sourceUrl = outfit.getLink();
-            String outfitId = outfit.getId();
+            String outfitId = outfit.getId().toString();
             int currentNumber = i + 1;
 
             if (sourceUrl == null || !sourceUrl.contains("imgur.com")) {

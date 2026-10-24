@@ -106,7 +106,7 @@ class SqliteToPostgresMigrationServiceTest {
         assertTrue(report.errors.isEmpty(), "Expected zero migration errors");
 
         // Legacy outfits have no server or channel ID, so they are skipped
-        assertTrue(outfitRepository.findById("legacy-1").isEmpty());
+        assertEquals(0, outfitRepository.count());
 
         Optional<GalleryChannelEntity> gallery = galleryChannelRepository.findById("chan-1");
         assertTrue(gallery.isPresent());

@@ -49,10 +49,6 @@ Items 1–3 of that review (cross-server staff permissions, vote integrity, dele
 
 ## Review: Correctness & Data Integrity
 
-### Longer Outfit IDs
-**What:** Replace `IdService.generateShort()` (8 hex characters, 32 bits) with a longer ID, and insert with a collision check rather than `save()`.
-**Why:** By the birthday paradox there's a 50% chance of a collision around 77k outfits. A collision silently overwrites both the database row and the stored image.
-
 ### Atomic Gallery Ingestion
 **What:** Make upload → save → showcase post recoverable: delete the stored object if the database save fails, and retry or flag outfits whose showcase post failed.
 **Why:** Failures today leave orphaned images in storage or outfits nobody ever sees.
