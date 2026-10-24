@@ -237,7 +237,7 @@ class GalleryEventListenerTest {
         assertEquals("chan-gallery", savedOutfit.getChannelId());
         assertDoesNotThrow(() -> UUID.fromString(savedOutfit.getId()));
         assertEquals(36, savedOutfit.getId().length());
-        verify(minioStorageService).uploadOutfitFromUrl(eq(savedOutfit.getId()), anyString());
+        verify(storageService).uploadOutfitFromUrl(eq(savedOutfit.getId()), anyString());
         verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_ADDED), eq("user-1"), eq("srv-1"),
                 eq(AuditService.TARGET_OUTFIT), eq(savedOutfit.getId()), any());
         verify(messageCreateAction).queue(any(), any());
@@ -259,8 +259,8 @@ class GalleryEventListenerTest {
         ArgumentCaptor<OutfitEntity> outfitCaptor = ArgumentCaptor.forClass(OutfitEntity.class);
         verify(outfitRepository).save(outfitCaptor.capture());
         assertEquals(freshId, outfitCaptor.getValue().getId());
-        verify(minioStorageService).uploadOutfitFromUrl(eq(freshId), anyString());
-        verify(minioStorageService, never()).uploadOutfitFromUrl(eq(takenId), anyString());
+        verify(storageService).uploadOutfitFromUrl(eq(freshId), anyString());
+        verify(storageService, never()).uploadOutfitFromUrl(eq(takenId), anyString());
     }
 
     @Test
