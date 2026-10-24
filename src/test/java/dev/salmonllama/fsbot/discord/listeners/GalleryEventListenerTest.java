@@ -355,13 +355,38 @@ class GalleryEventListenerTest {
         when(interactionHook.sendMessage(anyString())).thenReturn(webhookAction);
         when(webhookAction.setEphemeral(true)).thenReturn(webhookAction);
 
+        when(outfitService.delete(eq("outfit-99"), eq("user-submitter"), any(), any())).thenReturn(true);
+
         listener.handle(buttonEvent);
 
-        assertTrue(outfit.isDeleted());
-        verify(outfitRepository).save(outfit);
+        // Deletion goes through OutfitService, which quarantines the image and audits
+        verify(outfitService).delete(eq("outfit-99"), eq("user-submitter"), any(), any());
+        verify(outfitRepository, never()).save(any());
         verify(webhookAction).queue();
-        verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_DELETED), eq("user-submitter"), any(),
-                eq(AuditService.TARGET_OUTFIT), eq("outfit-99"), eq("Deleted by its submitter"));
+    }
+
+    @Test
+    void testHandleDeleteImageMoveFails() {
+        when(buttonEvent.getComponentId()).thenReturn("gallery:delete:outfit-99");
+        when(buttonEvent.getUser()).thenReturn(author);
+        when(author.getId()).thenReturn("user-submitter");
+
+        OutfitEntity outfit = new OutfitEntity(
+                "outfit-99", "https://media.fashionscape.org/outfits/outfit-99.png", "user-submitter", "tag", null,
+                "Player", Instant.now(), Instant.now(), false, false, 0, null,
+                "server-1",
+                "channel-1"
+        );
+        when(outfitRepository.findByIdAndDeletedFalse("outfit-99")).thenReturn(Optional.of(outfit));
+        when(outfitService.delete(eq("outfit-99"), eq("user-submitter"), any(), any()))
+                .thenThrow(new OutfitService.OutfitImageException("boom", new RuntimeException()));
+        when(buttonEvent.reply(anyString())).thenReturn(replyCallbackAction);
+        when(replyCallbackAction.setEphemeral(true)).thenReturn(replyCallbackAction);
+
+        listener.handle(buttonEvent);
+
+        verify(buttonEvent).reply(contains("Nothing was changed"));
+        verify(buttonEvent, never()).editMessageEmbeds(any(MessageEmbed.class));
     }
 
     @Test
@@ -386,8 +411,7 @@ class GalleryEventListenerTest {
 
         listener.handle(buttonEvent);
 
-        assertFalse(outfit.isDeleted());
-        verify(outfitRepository, never()).save(any());
+        verifyNoInteractions(outfitService);
         verify(buttonEvent).reply(contains("do not have permission"));
         verifyNoInteractions(auditService);
     }
@@ -414,8 +438,7 @@ class GalleryEventListenerTest {
 
         listener.handle(buttonEvent);
 
-        assertFalse(outfit.isDeleted());
-        verify(outfitRepository, never()).save(any());
+        verifyNoInteractions(outfitService);
         verify(buttonEvent).reply(contains("do not have permission"));
     }
 
@@ -454,11 +477,11 @@ class GalleryEventListenerTest {
         when(interactionHook.sendMessage(anyString())).thenReturn(webhookAction);
         when(webhookAction.setEphemeral(true)).thenReturn(webhookAction);
 
+        when(outfitService.delete(eq("outfit-99"), eq("home-mod"), any(), any())).thenReturn(true);
+
         listener.handle(buttonEvent);
 
-        assertTrue(outfit.isDeleted());
-        verify(outfitRepository).save(outfit);
-        verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_DELETED), eq("home-mod"), any(),
-                eq(AuditService.TARGET_OUTFIT), eq("outfit-99"), contains("Deleted by staff"));
+        verify(outfitService).delete(eq("outfit-99"), eq("home-mod"), any(), any());
+        verify(webhookAction).queue();
     }
 }

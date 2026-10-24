@@ -194,4 +194,87 @@ class MinioStorageServiceTest {
         assertEquals("webp", storageService.resolveExtension(null, "https://i.imgur.com/test.webp"));
         assertEquals("png", storageService.resolveExtension(null, null));
     }
+
+    @Test
+    void prepareBucketLimitsPublicReadToOutfits() throws Exception {
+        when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
+
+        storageService.prepareBucket();
+
+        ArgumentCaptor<SetBucketPolicyArgs> captor = ArgumentCaptor.forClass(SetBucketPolicyArgs.class);
+        verify(minioClient).setBucketPolicy(captor.capture());
+        String policy = captor.getValue().config();
+        assertTrue(policy.contains("\"arn:aws:s3:::test-bucket/outfits/*\""), policy);
+        assertTrue(policy.contains("s3:GetObject"));
+        assertFalse(policy.contains("deleted/"));
+    }
+
+    @Test
+    void initializeBucketDoesNotThrowWhenMinioIsDown() throws Exception {
+        when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenThrow(new java.io.IOException("connection refused"));
+
+        assertDoesNotThrow(() -> storageService.initializeBucket());
+    }
+
+    @Test
+    void uploadPreparesBucketOnlyOnce() throws Exception {
+        when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
+
+        storageService.upload("outfits/a.png", new byte[]{1}, "image/png");
+        storageService.upload("outfits/b.png", new byte[]{2}, "image/png");
+
+        verify(minioClient, times(1)).bucketExists(any(BucketExistsArgs.class));
+        verify(minioClient, times(1)).setBucketPolicy(any(SetBucketPolicyArgs.class));
+        verify(minioClient, times(2)).putObject(any(PutObjectArgs.class));
+    }
+
+    @Test
+    void quarantineCopiesToDeletedPrefixThenRemovesOriginal() throws Exception {
+        when(minioClient.statObject(any(StatObjectArgs.class))).thenReturn(mock(StatObjectResponse.class));
+
+        assertEquals("deleted/outfits/x.png", storageService.quarantine("outfits/x.png"));
+
+        ArgumentCaptor<CopyObjectArgs> copy = ArgumentCaptor.forClass(CopyObjectArgs.class);
+        ArgumentCaptor<RemoveObjectArgs> remove = ArgumentCaptor.forClass(RemoveObjectArgs.class);
+        var order = inOrder(minioClient);
+        order.verify(minioClient).copyObject(copy.capture());
+        order.verify(minioClient).removeObject(remove.capture());
+        assertEquals("deleted/outfits/x.png", copy.getValue().object());
+        assertEquals("outfits/x.png", copy.getValue().source().object());
+        assertEquals("outfits/x.png", remove.getValue().object());
+    }
+
+    @Test
+    void quarantineIsSafeToRepeat() throws Exception {
+        ErrorResponse err = mock(ErrorResponse.class);
+        when(err.code()).thenReturn("NoSuchKey");
+        ErrorResponseException missing = mock(ErrorResponseException.class);
+        when(missing.errorResponse()).thenReturn(err);
+        when(minioClient.statObject(argThat((StatObjectArgs a) -> a != null && a.object().equals("outfits/x.png")))).thenThrow(missing);
+        when(minioClient.statObject(argThat((StatObjectArgs a) -> a != null && a.object().equals("deleted/outfits/x.png"))))
+                .thenReturn(mock(StatObjectResponse.class));
+
+        storageService.quarantine("outfits/x.png");
+
+        verify(minioClient, never()).copyObject(any());
+        verify(minioClient, never()).removeObject(any());
+    }
+
+    @Test
+    void releaseMovesImageBack() throws Exception {
+        when(minioClient.statObject(any(StatObjectArgs.class))).thenReturn(mock(StatObjectResponse.class));
+
+        storageService.release("outfits/x.png");
+
+        ArgumentCaptor<CopyObjectArgs> copy = ArgumentCaptor.forClass(CopyObjectArgs.class);
+        verify(minioClient).copyObject(copy.capture());
+        assertEquals("outfits/x.png", copy.getValue().object());
+        assertEquals("deleted/outfits/x.png", copy.getValue().source().object());
+    }
+
+    @Test
+    void quarantineRejectsKeysOutsideOutfits() {
+        assertThrows(IllegalArgumentException.class, () -> storageService.quarantine("deleted/outfits/x.png"));
+        assertThrows(IllegalArgumentException.class, () -> storageService.release("other/x.png"));
+    }
 }

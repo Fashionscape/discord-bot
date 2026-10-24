@@ -3,6 +3,7 @@ package dev.salmonllama.fsbot.storage;
 import dev.salmonllama.fsbot.config.BotProperties;
 import io.minio.*;
 import io.minio.errors.ErrorResponseException;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -23,9 +24,15 @@ public class MinioStorageService {
 
     private static final Logger logger = LoggerFactory.getLogger(MinioStorageService.class);
 
+    /** Objects under this prefix are publicly readable through the bucket policy. */
+    public static final String PUBLIC_PREFIX = "outfits/";
+    /** Images of deleted outfits are kept under this prefix, which the bucket policy doesn't expose. */
+    public static final String QUARANTINE_PREFIX = "deleted/";
+
     private final MinioClient minioClient;
     private final BotProperties properties;
     private final HttpClient httpClient;
+    private volatile boolean bucketReady = false;
 
     @org.springframework.beans.factory.annotation.Autowired
     public MinioStorageService(MinioClient minioClient, BotProperties properties) {
@@ -39,6 +46,52 @@ public class MinioStorageService {
         this.minioClient = minioClient;
         this.properties = properties;
         this.httpClient = httpClient;
+    }
+
+    /**
+     * Prepares the bucket at startup. A failure (MinIO not reachable yet) is logged and
+     * retried on the first upload, so it never stops the bot from starting.
+     */
+    @PostConstruct
+    public void initializeBucket() {
+        try {
+            prepareBucket();
+        } catch (Exception e) {
+            logger.warn("Could not prepare MinIO bucket '{}' at startup; will retry on first upload: {}",
+                    properties.minio().bucket(), e.getMessage());
+        }
+    }
+
+    /**
+     * Creates the bucket if needed and sets its policy so that only {@value #PUBLIC_PREFIX} is
+     * publicly readable. This replaces any existing bucket policy.
+     */
+    public synchronized void prepareBucket() throws Exception {
+        ensureBucketExists();
+        applyPublicReadPolicy();
+        bucketReady = true;
+    }
+
+    void applyPublicReadPolicy() throws Exception {
+        String bucket = properties.minio().bucket();
+        minioClient.setBucketPolicy(SetBucketPolicyArgs.builder()
+                .bucket(bucket)
+                .config(publicReadPolicy(bucket))
+                .build());
+        logger.info("MinIO bucket '{}' policy set: public read on '{}*' only", bucket, PUBLIC_PREFIX);
+    }
+
+    static String publicReadPolicy(String bucket) {
+        return """
+                {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},\
+                "Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/%s*"]}]}\
+                """.formatted(bucket, PUBLIC_PREFIX);
+    }
+
+    private void ensureReady() throws Exception {
+        if (!bucketReady) {
+            prepareBucket();
+        }
     }
 
     /**
@@ -57,7 +110,7 @@ public class MinioStorageService {
      * Upload an arbitrary input stream to MinIO.
      */
     public UploadResult upload(String objectName, InputStream inputStream, long size, String contentType) throws Exception {
-        ensureBucketExists();
+        ensureReady();
 
         String bucket = properties.minio().bucket();
         long partSize = size >= 0 ? -1 : 10 * 1024 * 1024; // 10MB chunk size for streams of unknown length
@@ -164,6 +217,46 @@ public class MinioStorageService {
                         .build()
         );
         logger.info("Deleted object '{}' from bucket '{}'", objectName, bucket);
+    }
+
+    /**
+     * Moves a public outfit image out of public read, to {@value #QUARANTINE_PREFIX} + its key.
+     * Safe to repeat: if the image was already moved, nothing happens.
+     *
+     * @return the quarantined key
+     */
+    public String quarantine(String publicKey) throws Exception {
+        if (!publicKey.startsWith(PUBLIC_PREFIX)) {
+            throw new IllegalArgumentException("Only objects under " + PUBLIC_PREFIX + " can be quarantined: " + publicKey);
+        }
+        String quarantinedKey = QUARANTINE_PREFIX + publicKey;
+        move(publicKey, quarantinedKey);
+        return quarantinedKey;
+    }
+
+    /**
+     * Moves a quarantined image back to its public key. Safe to repeat.
+     */
+    public void release(String publicKey) throws Exception {
+        if (!publicKey.startsWith(PUBLIC_PREFIX)) {
+            throw new IllegalArgumentException("Only objects under " + PUBLIC_PREFIX + " can be released: " + publicKey);
+        }
+        move(QUARANTINE_PREFIX + publicKey, publicKey);
+    }
+
+    private void move(String from, String to) throws Exception {
+        if (!objectExists(from) && objectExists(to)) {
+            logger.debug("Object '{}' was already moved to '{}'", from, to);
+            return;
+        }
+        String bucket = properties.minio().bucket();
+        minioClient.copyObject(CopyObjectArgs.builder()
+                .bucket(bucket)
+                .object(to)
+                .source(CopySource.builder().bucket(bucket).object(from).build())
+                .build());
+        minioClient.removeObject(RemoveObjectArgs.builder().bucket(bucket).object(from).build());
+        logger.info("Moved object '{}' to '{}' in bucket '{}'", from, to, bucket);
     }
 
     /**

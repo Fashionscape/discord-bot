@@ -224,12 +224,20 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
             return;
         }
 
-        outfit.setDeleted(true);
-        outfit.setUpdated(Instant.now());
-        outfitRepository.save(outfit);
-        auditService.record(event.getJDA(), AuditService.Action.OUTFIT_DELETED, userId,
-                event.getGuild() != null ? event.getGuild().getId() : null, AuditService.TARGET_OUTFIT, outfitId,
-                userId.equals(outfit.getSubmitter()) ? "Deleted by its submitter" : "Deleted by staff (submitter <@" + outfit.getSubmitter() + ">)");
+        try {
+            if (!outfitService.delete(outfitId, userId, event.getGuild() != null ? event.getGuild().getId() : null, event.getJDA())) {
+                event.reply("This outfit could not be found or has already been removed.")
+                        .setEphemeral(true)
+                        .queue();
+                return;
+            }
+        } catch (OutfitService.OutfitImageException e) {
+            logger.error("Failed to delete outfit {}", outfitId, e);
+            event.reply("This outfit could not be deleted because its image couldn't be moved. Nothing was changed; please try again.")
+                    .setEphemeral(true)
+                    .queue();
+            return;
+        }
 
         EmbedBuilder deletedEmbed = new EmbedBuilder()
                 .setTitle("Outfit Removed")

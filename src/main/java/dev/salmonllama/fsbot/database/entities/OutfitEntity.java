@@ -42,6 +42,12 @@ public class OutfitEntity {
     @Column(name = "deleted", nullable = false)
     private boolean deleted = false;
 
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    @Column(name = "deleted_by", length = 64)
+    private String deletedBy;
+
     @Column(name = "featured", nullable = false)
     private boolean featured = false;
 
@@ -173,6 +179,22 @@ public class OutfitEntity {
 
     public void setDeleted(boolean deleted) {
         this.deleted = deleted;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(Instant deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public String getDeletedBy() {
+        return deletedBy;
+    }
+
+    public void setDeletedBy(String deletedBy) {
+        this.deletedBy = deletedBy;
     }
 
     public boolean isFeatured() {

@@ -23,11 +23,13 @@ Data and information are not collected beyond the base information necessary for
 ## User Data:
 - User IDs are stored so we can track and give attribution to users who submit screenshots to the FashionScape Bot’s gallery.
 - User IDs may also be stored to deny a user from utilizing some or all features of the bot, if we suspect the user to be abusing or misusing our services.
+- When you upvote an outfit, your User ID is stored with that vote so that each user can vote once per outfit and can take their vote back.
 
 ## User Content: 
 - Images posted to gallery channels are not stored directly by the FashionScape Bot. Rather, the bot first uploads them to a private imgur gallery, and retrieves the link. This link is then stored in the bot's database as part of the gallery.
 - Text-based content that is sent in the same message as the image being posted. In Discord, this will be the message posted in the “Add A Comment” box in an image upload. [Here](https://media.discordapp.net/attachments/458346171681996815/737738392929829007/meta-describe.png?width=400&height=293) is an example.
   - This meta information is only collected so users may add clarifying information to their outfit submissions, such as components used in its creation. In addition, it can be used to credit someone if the outfit was not self-made.
+- When an outfit is deleted, by its submitter or by staff, it is removed from public view: it no longer appears in the gallery or in bot commands, and its image is no longer publicly accessible. The outfit record and its image are kept indefinitely, privately, so that staff can review or restore it. If you want your outfits erased completely, request deletion of your data as described below.
 
 # Accessing and deleting your data
 You may request deletion of your data by contacting Salmonllama#5727 or another FashionScapers Administrator. To do this, either join our discord and ping one of us, or create an issue on GitHub. A link to both are provided at the bottom of this privacy policy.

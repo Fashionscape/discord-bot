@@ -16,6 +16,10 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -48,7 +52,39 @@ class MinioIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        minioStorageService.ensureBucketExists();
+        minioStorageService.prepareBucket();
+    }
+
+    private int anonymousGetStatus(String objectName) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(minio.getS3URL() + "/fsbot-integration-test/" + objectName))
+                .GET()
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
+    }
+
+    @Test
+    @DisplayName("Only outfits/ is publicly readable; quarantined images are not")
+    void testQuarantineRemovesPublicAccess() throws Exception {
+        byte[] image = new byte[]{ (byte) 0x89, 0x50, 0x4E, 0x47 };
+        minioStorageService.uploadOutfit("outfit-q-1", image, "image/png");
+        assertEquals(200, anonymousGetStatus("outfits/outfit-q-1.png"));
+
+        String quarantined = minioStorageService.quarantine("outfits/outfit-q-1.png");
+        assertEquals("deleted/outfits/outfit-q-1.png", quarantined);
+        assertFalse(minioStorageService.objectExists("outfits/outfit-q-1.png"));
+        assertArrayEquals(image, minioStorageService.getObjectBytes(quarantined));
+        assertEquals(403, anonymousGetStatus(quarantined));
+
+        // Repeating the move is harmless
+        minioStorageService.quarantine("outfits/outfit-q-1.png");
+        assertTrue(minioStorageService.objectExists(quarantined));
+
+        minioStorageService.release("outfits/outfit-q-1.png");
+        assertEquals(200, anonymousGetStatus("outfits/outfit-q-1.png"));
+        assertFalse(minioStorageService.objectExists(quarantined));
+
+        minioStorageService.deleteObject("outfits/outfit-q-1.png");
     }
 
     @Test
