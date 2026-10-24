@@ -3,6 +3,7 @@ package dev.salmonllama.fsbot.services;
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
 import dev.salmonllama.fsbot.storage.SeaweedStorageService;
+import dev.salmonllama.fsbot.storage.UploadResult;
 import net.dv8tion.jda.api.JDA;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -97,6 +98,18 @@ public class OutfitService {
     @Transactional
     public OutfitEntity save(OutfitEntity outfit) {
         return outfitRepository.save(outfit);
+    }
+
+    /**
+     * Saves a new gallery outfit and uploads its image under the outfit's generated ID. Saving
+     * assigns the UUID, and the insert waits for the commit, so a failed upload writes no row.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public OutfitEntity submit(OutfitEntity outfit, String sourceUrl) throws Exception {
+        OutfitEntity saved = outfitRepository.save(outfit);
+        UploadResult upload = storageService.uploadOutfitFromUrl(saved.getId(), sourceUrl);
+        saved.setLink(upload.publicUrl());
+        return saved;
     }
 
     /**

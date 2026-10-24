@@ -3,6 +3,7 @@ package dev.salmonllama.fsbot.services;
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
 import dev.salmonllama.fsbot.storage.SeaweedStorageService;
+import dev.salmonllama.fsbot.storage.UploadResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,6 +59,35 @@ class OutfitServiceTest {
                 "server-1",
                 "channel-1"
         );
+    }
+
+    @Test
+    void testSubmitUploadsUnderGeneratedId() throws Exception {
+        OutfitEntity outfit = createSampleOutfit(null);
+        when(outfitRepository.save(outfit)).thenAnswer(inv -> {
+            outfit.setId("3f2b8c1e-9d4a-4e7b-8c2f-1a6d5e9b0c47");
+            return outfit;
+        });
+        when(storageService.uploadOutfitFromUrl("3f2b8c1e-9d4a-4e7b-8c2f-1a6d5e9b0c47", "https://cdn.discordapp.com/pic.png"))
+                .thenReturn(new UploadResult("outfits/3f2b8c1e-9d4a-4e7b-8c2f-1a6d5e9b0c47.png",
+                        "https://media.fashionscape.org/outfits/3f2b8c1e-9d4a-4e7b-8c2f-1a6d5e9b0c47.png", "bucket", 1024, "image/png"));
+
+        OutfitEntity saved = outfitService.submit(outfit, "https://cdn.discordapp.com/pic.png");
+
+        assertEquals("3f2b8c1e-9d4a-4e7b-8c2f-1a6d5e9b0c47", saved.getId());
+        assertEquals("https://media.fashionscape.org/outfits/3f2b8c1e-9d4a-4e7b-8c2f-1a6d5e9b0c47.png", saved.getLink());
+    }
+
+    @Test
+    void testSubmitPropagatesUploadFailure() throws Exception {
+        OutfitEntity outfit = createSampleOutfit(null);
+        when(outfitRepository.save(outfit)).thenAnswer(inv -> {
+            outfit.setId("3f2b8c1e-9d4a-4e7b-8c2f-1a6d5e9b0c47");
+            return outfit;
+        });
+        when(storageService.uploadOutfitFromUrl(any(), any())).thenThrow(new java.io.IOException("download failed"));
+
+        assertThrows(java.io.IOException.class, () -> outfitService.submit(outfit, "https://cdn.discordapp.com/pic.png"));
     }
 
     @Test

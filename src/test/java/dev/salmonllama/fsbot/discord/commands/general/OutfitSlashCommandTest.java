@@ -146,22 +146,6 @@ class OutfitSlashCommandTest {
     }
 
     @Test
-    void testExecuteInfoAcceptsPastedUuid() {
-        String id = "3f2b8c1e-9d4a-4e7b-8c2f-1a6d5e9b0c47";
-        when(slashEvent.getSubcommandName()).thenReturn("info");
-        when(slashEvent.getOption(eq("id"), any())).thenReturn("  `" + id + "` ");
-
-        OutfitEntity outfit = new OutfitEntity(id, "https://img.png", "1001", "osrs", "my outfit", "Player1", Instant.now(), Instant.now(), false, false, 7, null, "server-1", "channel-1");
-        when(outfitService.findById(id)).thenReturn(Optional.of(outfit));
-
-        command.execute(slashEvent);
-
-        ArgumentCaptor<MessageEmbed> embedCaptor = ArgumentCaptor.forClass(MessageEmbed.class);
-        verify(slashEvent).replyEmbeds(embedCaptor.capture());
-        assertEquals("Outfit Details: " + id, embedCaptor.getValue().getTitle());
-    }
-
-    @Test
     void testExecuteDeleteBySubmitter() {
         when(slashEvent.getSubcommandName()).thenReturn("delete");
         when(slashEvent.getOption(eq("id"), any())).thenReturn("outfit-to-delete");

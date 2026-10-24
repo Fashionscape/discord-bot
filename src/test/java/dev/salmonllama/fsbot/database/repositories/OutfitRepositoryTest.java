@@ -10,6 +10,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -19,12 +20,15 @@ class OutfitRepositoryTest {
     @Autowired
     private OutfitRepository outfitRepository;
 
+    private String outfit1Id;
+    private String deletedOutfitId;
+
     @BeforeEach
     void setUp() {
         outfitRepository.deleteAll();
 
         OutfitEntity outfit1 = new OutfitEntity(
-                "outfit-1",
+                null,
                 "https://media.fashionscape.org/outfit1.png",
                 "user-100",
                 "zammy",
@@ -41,7 +45,7 @@ class OutfitRepositoryTest {
         );
 
         OutfitEntity outfit2 = new OutfitEntity(
-                "outfit-2",
+                null,
                 "https://media.fashionscape.org/outfit2.png",
                 "user-200",
                 "sara",
@@ -58,7 +62,7 @@ class OutfitRepositoryTest {
         );
 
         OutfitEntity deletedOutfit = new OutfitEntity(
-                "outfit-deleted",
+                null,
                 "https://media.fashionscape.org/deleted.png",
                 "user-100",
                 "guthix",
@@ -75,6 +79,8 @@ class OutfitRepositoryTest {
         );
 
         outfitRepository.saveAll(List.of(outfit1, outfit2, deletedOutfit));
+        outfit1Id = outfit1.getId();
+        deletedOutfitId = deletedOutfit.getId();
     }
 
     @Test
@@ -85,11 +91,11 @@ class OutfitRepositoryTest {
 
     @Test
     void testFindByIdAndDeletedFalse() {
-        Optional<OutfitEntity> outfit = outfitRepository.findByIdAndDeletedFalse("outfit-1");
+        Optional<OutfitEntity> outfit = outfitRepository.findByIdAndDeletedFalse(outfit1Id);
         assertTrue(outfit.isPresent());
         assertEquals("user-100", outfit.get().getSubmitter());
 
-        Optional<OutfitEntity> deleted = outfitRepository.findByIdAndDeletedFalse("outfit-deleted");
+        Optional<OutfitEntity> deleted = outfitRepository.findByIdAndDeletedFalse(deletedOutfitId);
         assertFalse(deleted.isPresent());
     }
 
@@ -97,14 +103,14 @@ class OutfitRepositoryTest {
     void testFindBySubmitterAndDeletedFalse() {
         List<OutfitEntity> outfits = outfitRepository.findBySubmitterAndDeletedFalse("user-100");
         assertEquals(1, outfits.size());
-        assertEquals("outfit-1", outfits.get(0).getId());
+        assertEquals(outfit1Id, outfits.get(0).getId());
     }
 
     @Test
     void testFindByTagIgnoreCaseAndDeletedFalse() {
         List<OutfitEntity> outfits = outfitRepository.findByTagIgnoreCaseAndDeletedFalse("ZAMMY");
         assertEquals(1, outfits.size());
-        assertEquals("outfit-1", outfits.get(0).getId());
+        assertEquals(outfit1Id, outfits.get(0).getId());
     }
 
     @Test
@@ -130,9 +136,14 @@ class OutfitRepositoryTest {
     }
 
     @Test
+    void testSaveGeneratesUuid() {
+        assertDoesNotThrow(() -> UUID.fromString(outfit1Id));
+        assertNotEquals(outfit1Id, deletedOutfitId);
+    }
+
+    @Test
     void testDatabaseRejectsOutfitWithoutServerId() {
         OutfitEntity outfit = new OutfitEntity();
-        outfit.setId("orphan");
         outfit.setLink("https://example.com/orphan.png");
         outfit.setSubmitter("user-1");
         outfit.setChannelId("channel-1");
@@ -143,7 +154,6 @@ class OutfitRepositoryTest {
     @Test
     void testDatabaseRejectsOutfitWithoutChannelId() {
         OutfitEntity outfit = new OutfitEntity();
-        outfit.setId("orphan");
         outfit.setLink("https://example.com/orphan.png");
         outfit.setSubmitter("user-1");
         outfit.setServerId("server-1");

@@ -62,12 +62,14 @@ class OutfitVoteConcurrencyIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    private String targetId;
+
     @BeforeEach
     void setUp() {
         outfitRepository.deleteAll();
-        outfitRepository.save(new OutfitEntity("vote-target", "https://media.fashionscape.org/vote-target.png",
+        targetId = outfitRepository.save(new OutfitEntity(null, "https://media.fashionscape.org/vote-target.png",
                 "submitter", "tag", null, "Player", Instant.now(), Instant.now(), false, false, 0, null,
-                "server-1", "channel-1"));
+                "server-1", "channel-1")).getId();
     }
 
     private void runConcurrently(int tasks, java.util.function.IntConsumer task) throws Exception {
@@ -91,35 +93,35 @@ class OutfitVoteConcurrencyIntegrationTest {
 
     private int voteRows() {
         return jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM outfit_votes WHERE outfit_id = 'vote-target'", Integer.class);
+                "SELECT COUNT(*) FROM outfit_votes WHERE outfit_id = ?", Integer.class, targetId);
     }
 
     private int voteCount() {
-        return outfitRepository.findVoteCount("vote-target").orElseThrow();
+        return outfitRepository.findVoteCount(targetId).orElseThrow();
     }
 
     @Test
     @DisplayName("New outfits start with no votes; a second click takes the vote back")
     void testToggleVote() {
         assertEquals(0, voteCount());
-        assertEquals(Optional.of(new OutfitService.VoteResult(true, 1)), outfitService.toggleVote("vote-target", "voter-1"));
-        assertEquals(Optional.of(new OutfitService.VoteResult(true, 2)), outfitService.toggleVote("vote-target", "voter-2"));
-        assertEquals(Optional.of(new OutfitService.VoteResult(false, 1)), outfitService.toggleVote("vote-target", "voter-1"));
+        assertEquals(Optional.of(new OutfitService.VoteResult(true, 1)), outfitService.toggleVote(targetId, "voter-1"));
+        assertEquals(Optional.of(new OutfitService.VoteResult(true, 2)), outfitService.toggleVote(targetId, "voter-2"));
+        assertEquals(Optional.of(new OutfitService.VoteResult(false, 1)), outfitService.toggleVote(targetId, "voter-1"));
         assertEquals(1, voteRows());
     }
 
     @Test
     @DisplayName("Saving the entity never overwrites vote_count or display_count")
     void testEntitySaveKeepsCounters() {
-        outfitService.toggleVote("vote-target", "voter-1");
-        outfitService.recordShown("vote-target");
+        outfitService.toggleVote(targetId, "voter-1");
+        outfitService.recordShown(targetId);
 
-        OutfitEntity loaded = outfitRepository.findById("vote-target").orElseThrow();
+        OutfitEntity loaded = outfitRepository.findById(targetId).orElseThrow();
         loaded.setDisplayCount(99);
         loaded.setMeta("edited");
         outfitRepository.save(loaded);
 
-        OutfitEntity after = outfitRepository.findById("vote-target").orElseThrow();
+        OutfitEntity after = outfitRepository.findById(targetId).orElseThrow();
         assertEquals(1, after.getVoteCount());
         assertEquals(1, after.getDisplayCount());
         assertEquals("edited", after.getMeta());
@@ -128,7 +130,7 @@ class OutfitVoteConcurrencyIntegrationTest {
     @Test
     @DisplayName("50 different users voting at once are all counted")
     void testDistinctUsersVoteConcurrently() throws Exception {
-        runConcurrently(50, n -> outfitService.toggleVote("vote-target", "voter-" + n));
+        runConcurrently(50, n -> outfitService.toggleVote(targetId, "voter-" + n));
 
         assertEquals(50, voteCount());
         assertEquals(50, voteRows());
@@ -137,7 +139,7 @@ class OutfitVoteConcurrencyIntegrationTest {
     @Test
     @DisplayName("One user clicking many times at once never counts more than one vote")
     void testSameUserClicksConcurrently() throws Exception {
-        runConcurrently(10, n -> outfitService.toggleVote("vote-target", "same-voter"));
+        runConcurrently(10, n -> outfitService.toggleVote(targetId, "same-voter"));
 
         int count = voteCount();
         assertTrue(count == 0 || count == 1, "vote_count was " + count);
@@ -147,11 +149,11 @@ class OutfitVoteConcurrencyIntegrationTest {
     @Test
     @DisplayName("Voting on a deleted outfit changes nothing")
     void testVoteOnDeletedOutfit() {
-        OutfitEntity outfit = outfitRepository.findById("vote-target").orElseThrow();
+        OutfitEntity outfit = outfitRepository.findById(targetId).orElseThrow();
         outfit.setDeleted(true);
         outfitRepository.save(outfit);
 
-        assertTrue(outfitService.toggleVote("vote-target", "voter-1").isEmpty());
+        assertTrue(outfitService.toggleVote(targetId, "voter-1").isEmpty());
         assertEquals(0, voteCount());
         assertEquals(0, voteRows());
     }
@@ -159,8 +161,8 @@ class OutfitVoteConcurrencyIntegrationTest {
     @Test
     @DisplayName("Each /outfit random showing adds exactly one to display_count")
     void testRecordShownConcurrently() throws Exception {
-        runConcurrently(25, n -> outfitService.recordShown("vote-target"));
+        runConcurrently(25, n -> outfitService.recordShown(targetId));
 
-        assertEquals(25, outfitRepository.findById("vote-target").orElseThrow().getDisplayCount());
+        assertEquals(25, outfitRepository.findById(targetId).orElseThrow().getDisplayCount());
     }
 }

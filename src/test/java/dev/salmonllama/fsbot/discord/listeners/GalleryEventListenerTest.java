@@ -10,8 +10,6 @@ import dev.salmonllama.fsbot.services.BlocklistService;
 import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.OutfitService;
 import dev.salmonllama.fsbot.services.PermissionService;
-import dev.salmonllama.fsbot.storage.SeaweedStorageService;
-import dev.salmonllama.fsbot.storage.UploadResult;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.entities.channel.unions.MessageChannelUnion;
@@ -32,7 +30,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -53,8 +50,6 @@ class GalleryEventListenerTest {
     @Mock
     private OutfitService outfitService;
 
-    @Mock
-    private SeaweedStorageService storageService;
 
     @Mock
     private BlocklistService blocklistService;
@@ -110,7 +105,6 @@ class GalleryEventListenerTest {
                 galleryChannelRepository,
                 outfitRepository,
                 outfitService,
-                storageService,
                 blocklistService,
                 new PermissionService(staticPermissionRepository, properties),
                 auditService
@@ -132,7 +126,7 @@ class GalleryEventListenerTest {
 
         listener.onMessageReceived(messageEvent);
 
-        verifyNoInteractions(galleryChannelRepository, storageService, outfitRepository);
+        verifyNoInteractions(galleryChannelRepository, outfitService, outfitRepository);
     }
 
     @Test
@@ -144,7 +138,7 @@ class GalleryEventListenerTest {
 
         listener.onMessageReceived(messageEvent);
 
-        verifyNoInteractions(galleryChannelRepository, storageService, outfitRepository);
+        verifyNoInteractions(galleryChannelRepository, outfitService, outfitRepository);
     }
 
     @Test
@@ -163,7 +157,7 @@ class GalleryEventListenerTest {
 
         listener.onMessageReceived(messageEvent);
 
-        verifyNoInteractions(galleryChannelRepository, storageService, outfitRepository);
+        verifyNoInteractions(galleryChannelRepository, outfitService, outfitRepository);
     }
 
     @Test
@@ -183,10 +177,11 @@ class GalleryEventListenerTest {
 
         listener.onMessageReceived(messageEvent);
 
-        verifyNoInteractions(storageService, outfitRepository);
+        verifyNoInteractions(outfitService, outfitRepository);
     }
 
-    private void stubGalleryImageUpload() throws Exception {
+    @Test
+    void testSuccessfulImageUploadAndPost() throws Exception {
         when(messageEvent.getAuthor()).thenReturn(author);
         when(author.isBot()).thenReturn(false);
         when(messageEvent.isWebhookMessage()).thenReturn(false);
@@ -210,57 +205,33 @@ class GalleryEventListenerTest {
         when(attachment.getUrl()).thenReturn("https://cdn.discordapp.com/attachments/1/2/pic.png");
         when(message.getAttachments()).thenReturn(List.of(attachment));
 
-        UploadResult uploadResult = new UploadResult("outfits/id.png", "https://media.fashionscape.org/outfits/id.png", "bucket", 1024, "image/png");
-        when(storageService.uploadOutfitFromUrl(anyString(), eq("https://cdn.discordapp.com/attachments/1/2/pic.png")))
-                .thenReturn(uploadResult);
+        when(outfitService.submit(any(OutfitEntity.class), eq("https://cdn.discordapp.com/attachments/1/2/pic.png")))
+                .thenAnswer(inv -> {
+                    OutfitEntity outfit = inv.getArgument(0);
+                    outfit.setId("3f2b8c1e-9d4a-4e7b-8c2f-1a6d5e9b0c47");
+                    outfit.setLink("https://media.fashionscape.org/outfits/3f2b8c1e-9d4a-4e7b-8c2f-1a6d5e9b0c47.png");
+                    return outfit;
+                });
 
         when(channel.sendMessageEmbeds(any(MessageEmbed.class))).thenReturn(messageCreateAction);
         when(messageCreateAction.setActionRow(any(), any())).thenReturn(messageCreateAction);
 
-    }
-
-    @Test
-    void testSuccessfulImageUploadAndPost() throws Exception {
-        stubGalleryImageUpload();
-
         listener.onMessageReceived(messageEvent);
 
         ArgumentCaptor<OutfitEntity> outfitCaptor = ArgumentCaptor.forClass(OutfitEntity.class);
-        verify(outfitRepository).save(outfitCaptor.capture());
+        verify(outfitService).submit(outfitCaptor.capture(), eq("https://cdn.discordapp.com/attachments/1/2/pic.png"));
 
         OutfitEntity savedOutfit = outfitCaptor.getValue();
+        assertEquals("3f2b8c1e-9d4a-4e7b-8c2f-1a6d5e9b0c47", savedOutfit.getId());
         assertEquals("user-1", savedOutfit.getSubmitter());
         assertEquals("osrs", savedOutfit.getTag());
         assertEquals("My cool outfit", savedOutfit.getMeta());
-        assertEquals("https://media.fashionscape.org/outfits/id.png", savedOutfit.getLink());
+        assertEquals("https://media.fashionscape.org/outfits/3f2b8c1e-9d4a-4e7b-8c2f-1a6d5e9b0c47.png", savedOutfit.getLink());
         assertEquals("srv-1", savedOutfit.getServerId());
         assertEquals("chan-gallery", savedOutfit.getChannelId());
-        assertDoesNotThrow(() -> UUID.fromString(savedOutfit.getId()));
-        assertEquals(36, savedOutfit.getId().length());
-        verify(storageService).uploadOutfitFromUrl(eq(savedOutfit.getId()), anyString());
         verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_ADDED), eq("user-1"), eq("srv-1"),
                 eq(AuditService.TARGET_OUTFIT), eq(savedOutfit.getId()), any());
         verify(messageCreateAction).queue(any(), any());
-    }
-
-    @Test
-    void testGeneratedOutfitIdAlreadyInUseIsReplaced() throws Exception {
-        stubGalleryImageUpload();
-        when(outfitRepository.existsById(anyString())).thenReturn(true, false);
-
-        listener.onMessageReceived(messageEvent);
-
-        ArgumentCaptor<String> checkedIds = ArgumentCaptor.forClass(String.class);
-        verify(outfitRepository, times(2)).existsById(checkedIds.capture());
-        String takenId = checkedIds.getAllValues().get(0);
-        String freshId = checkedIds.getAllValues().get(1);
-        assertNotEquals(takenId, freshId);
-
-        ArgumentCaptor<OutfitEntity> outfitCaptor = ArgumentCaptor.forClass(OutfitEntity.class);
-        verify(outfitRepository).save(outfitCaptor.capture());
-        assertEquals(freshId, outfitCaptor.getValue().getId());
-        verify(storageService).uploadOutfitFromUrl(eq(freshId), anyString());
-        verify(storageService, never()).uploadOutfitFromUrl(eq(takenId), anyString());
     }
 
     @Test

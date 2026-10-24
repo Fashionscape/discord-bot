@@ -7,11 +7,8 @@ import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
 import dev.salmonllama.fsbot.discord.components.ButtonHandler;
 import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.BlocklistService;
-import dev.salmonllama.fsbot.services.IdService;
 import dev.salmonllama.fsbot.services.OutfitService;
 import dev.salmonllama.fsbot.services.PermissionService;
-import dev.salmonllama.fsbot.storage.SeaweedStorageService;
-import dev.salmonllama.fsbot.storage.UploadResult;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
@@ -42,7 +39,6 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
     private final GalleryChannelRepository galleryChannelRepository;
     private final OutfitRepository outfitRepository;
     private final OutfitService outfitService;
-    private final SeaweedStorageService storageService;
     private final BlocklistService blocklistService;
     private final PermissionService permissionService;
     private final AuditService auditService;
@@ -51,7 +47,6 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
             GalleryChannelRepository galleryChannelRepository,
             OutfitRepository outfitRepository,
             OutfitService outfitService,
-            SeaweedStorageService storageService,
             BlocklistService blocklistService,
             PermissionService permissionService,
             AuditService auditService
@@ -59,7 +54,6 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
         this.galleryChannelRepository = galleryChannelRepository;
         this.outfitRepository = outfitRepository;
         this.outfitService = outfitService;
-        this.storageService = storageService;
         this.blocklistService = blocklistService;
         this.permissionService = permissionService;
         this.auditService = auditService;
@@ -107,18 +101,14 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
 
         for (Message.Attachment attachment : imageAttachments) {
             try {
-                String outfitId = newOutfitId();
                 String sourceUrl = attachment.getUrl();
-
-                UploadResult uploadResult = storageService.uploadOutfitFromUrl(outfitId, sourceUrl);
-
                 String tag = gallery.getTag() != null && !gallery.getTag().isBlank() ? gallery.getTag() : "general";
                 String meta = event.getMessage().getContentRaw();
                 String discordName = event.getMember() != null ? event.getMember().getEffectiveName() : event.getAuthor().getName();
 
-                OutfitEntity outfit = new OutfitEntity(
-                        outfitId,
-                        uploadResult.publicUrl(),
+                OutfitEntity outfit = outfitService.submit(new OutfitEntity(
+                        null,
+                        sourceUrl,
                         userId,
                         tag,
                         meta,
@@ -131,16 +121,16 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
                         null,
                         serverId,
                         channelId
-                );
+                ), sourceUrl);
+                String outfitId = outfit.getId();
 
-                outfitRepository.save(outfit);
                 logger.info("Saved outfit {} submitted by {}", outfitId, userId);
                 auditService.record(event.getJDA(), AuditService.Action.OUTFIT_ADDED, userId, serverId,
                         AuditService.TARGET_OUTFIT, outfitId, "Submitted in <#" + channelId + "> with tag `" + tag + "`");
 
                 EmbedBuilder embed = new EmbedBuilder()
                         .setTitle("New Outfit Submission!")
-                        .setImage(uploadResult.publicUrl())
+                        .setImage(outfit.getLink())
                         .setColor(new Color(0x3B88C3))
                         .addField("Submitter", event.getAuthor().getAsMention(), true)
                         .addField("Tag", tag, true)
@@ -165,20 +155,6 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
                 logger.error("Failed to process gallery upload for user {} in channel {}", userId, channelId, e);
             }
         }
-    }
-
-    /**
-     * Picks an ID no existing outfit uses. The ID also names the stored image, so a reused ID would
-     * overwrite another outfit's row and image. Full UUIDs make a clash vanishingly unlikely, and the
-     * check covers the legacy 8-character IDs too.
-     */
-    private String newOutfitId() {
-        String id = IdService.generate();
-        while (outfitRepository.existsById(id)) {
-            logger.warn("Generated outfit ID {} is already in use, generating another", id);
-            id = IdService.generate();
-        }
-        return id;
     }
 
     @Override

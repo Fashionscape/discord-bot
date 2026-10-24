@@ -15,6 +15,7 @@ import java.util.Objects;
 public class OutfitEntity {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", length = 64, nullable = false)
     private String id;
 
