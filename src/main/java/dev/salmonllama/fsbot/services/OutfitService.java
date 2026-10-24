@@ -91,15 +91,47 @@ public class OutfitService {
         return outfitRepository.save(outfit);
     }
 
+    /**
+     * Adds the user's vote, or removes it if they already voted. One vote per user per outfit;
+     * the vote row and the count change together in one transaction.
+     *
+     * @return the outcome, or empty if the outfit doesn't exist or is deleted
+     */
     @Transactional
-    public Optional<OutfitEntity> upvote(String id) {
-        return outfitRepository.findById(id).map(outfit -> {
-            outfit.setDisplayCount(outfit.getDisplayCount() + 1);
-            outfit.setUpdated(Instant.now());
-            OutfitEntity saved = outfitRepository.save(outfit);
-            logger.debug("Upvoted outfit {}: new count {}", id, saved.getDisplayCount());
-            return saved;
-        });
+    public Optional<VoteResult> toggleVote(String outfitId, String userId) {
+        if (!outfitRepository.existsByIdAndDeletedFalse(outfitId)) {
+            return Optional.empty();
+        }
+
+        boolean added;
+        if (outfitRepository.insertVote(outfitId, userId) == 1) {
+            if (outfitRepository.incrementVoteCount(outfitId) == 0) {
+                // Deleted after the check above: take the vote back out
+                outfitRepository.deleteVote(outfitId, userId);
+                return Optional.empty();
+            }
+            added = true;
+        } else {
+            if (outfitRepository.deleteVote(outfitId, userId) == 1) {
+                outfitRepository.decrementVoteCount(outfitId);
+            }
+            added = false;
+        }
+
+        int count = outfitRepository.findVoteCount(outfitId).orElse(0);
+        logger.debug("Vote {} on outfit {} by {}: count {}", added ? "added" : "removed", outfitId, userId, count);
+        return Optional.of(new VoteResult(added, count));
+    }
+
+    public record VoteResult(boolean added, int voteCount) {
+    }
+
+    /**
+     * Counts one more time the outfit was shown by /outfit random.
+     */
+    @Transactional
+    public void recordShown(String id) {
+        outfitRepository.incrementDisplayCount(id);
     }
 
     @Transactional

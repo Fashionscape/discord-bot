@@ -8,6 +8,7 @@ import dev.salmonllama.fsbot.discord.components.ButtonHandler;
 import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.BlocklistService;
 import dev.salmonllama.fsbot.services.IdService;
+import dev.salmonllama.fsbot.services.OutfitService;
 import dev.salmonllama.fsbot.services.PermissionService;
 import dev.salmonllama.fsbot.storage.MinioStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
@@ -40,6 +41,7 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
 
     private final GalleryChannelRepository galleryChannelRepository;
     private final OutfitRepository outfitRepository;
+    private final OutfitService outfitService;
     private final MinioStorageService minioStorageService;
     private final BlocklistService blocklistService;
     private final PermissionService permissionService;
@@ -48,6 +50,7 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
     public GalleryEventListener(
             GalleryChannelRepository galleryChannelRepository,
             OutfitRepository outfitRepository,
+            OutfitService outfitService,
             MinioStorageService minioStorageService,
             BlocklistService blocklistService,
             PermissionService permissionService,
@@ -55,6 +58,7 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
     ) {
         this.galleryChannelRepository = galleryChannelRepository;
         this.outfitRepository = outfitRepository;
+        this.outfitService = outfitService;
         this.minioStorageService = minioStorageService;
         this.blocklistService = blocklistService;
         this.permissionService = permissionService;
@@ -175,26 +179,25 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
     }
 
     private void handleUpvote(ButtonInteractionEvent event, String outfitId) {
-        Optional<OutfitEntity> outfitOpt = outfitRepository.findByIdAndDeletedFalse(outfitId);
+        Optional<OutfitService.VoteResult> result = outfitService.toggleVote(outfitId, event.getUser().getId());
 
-        if (outfitOpt.isEmpty()) {
+        if (result.isEmpty()) {
             event.reply("This outfit could not be found or has been removed.")
                     .setEphemeral(true)
                     .queue();
             return;
         }
 
-        OutfitEntity outfit = outfitOpt.get();
-        outfit.setDisplayCount(outfit.getDisplayCount() + 1);
-        outfit.setUpdated(Instant.now());
-        outfitRepository.save(outfit);
+        OutfitService.VoteResult vote = result.get();
+        String label = "Upvote (" + vote.voteCount() + ")";
+        List<Button> buttons = event.getMessage().getButtons().stream()
+                .map(button -> (UPVOTE_PREFIX + outfitId).equals(button.getId()) ? button.withLabel(label) : button)
+                .toList();
 
-        int updatedCount = outfit.getDisplayCount();
-        Button updatedUpvoteButton = Button.primary(UPVOTE_PREFIX + outfitId, "Upvote (" + updatedCount + ")");
-        Button deleteButton = Button.danger(DELETE_PREFIX + outfitId, "Delete");
-
-        event.editComponents(ActionRow.of(updatedUpvoteButton, deleteButton)).queue(
-                success -> event.getHook().sendMessage("Thanks for voting! (Outfit `" + outfitId + "` now has " + updatedCount + " votes)")
+        event.editComponents(ActionRow.of(buttons)).queue(
+                success -> event.getHook().sendMessage(vote.added()
+                                ? "Vote added. Outfit `" + outfitId + "` now has " + vote.voteCount() + " votes."
+                                : "Vote removed. Outfit `" + outfitId + "` now has " + vote.voteCount() + " votes.")
                         .setEphemeral(true)
                         .queue()
         );

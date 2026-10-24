@@ -120,6 +120,7 @@ class OutfitSlashCommandTest {
         verify(slashEvent).replyEmbeds(embedCaptor.capture());
         MessageEmbed embed = embedCaptor.getValue();
         assertEquals("Outfit by Player1", embed.getTitle());
+        verify(outfitService).recordShown("outfit-1");
         verify(replyCallbackAction).queue();
     }
 
@@ -137,6 +138,9 @@ class OutfitSlashCommandTest {
         verify(slashEvent).replyEmbeds(embedCaptor.capture());
         MessageEmbed embed = embedCaptor.getValue();
         assertEquals("Outfit Details: outfit-123", embed.getTitle());
+        assertTrue(embed.getFields().stream().anyMatch(f -> "Upvotes".equals(f.getName()) && "0".equals(f.getValue())));
+        assertTrue(embed.getFields().stream().anyMatch(f -> "Times shown".equals(f.getName()) && "7".equals(f.getValue())));
+        verify(outfitService, never()).recordShown(anyString());
     }
 
     @Test

@@ -131,15 +131,56 @@ class OutfitServiceTest {
     }
 
     @Test
-    void testUpvote() {
-        OutfitEntity outfit = createSampleOutfit("upvote-me");
-        outfit.setDisplayCount(10);
-        when(outfitRepository.findById("upvote-me")).thenReturn(Optional.of(outfit));
-        when(outfitRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    void testToggleVoteAdds() {
+        when(outfitRepository.existsByIdAndDeletedFalse("o-1")).thenReturn(true);
+        when(outfitRepository.insertVote("o-1", "voter")).thenReturn(1);
+        when(outfitRepository.incrementVoteCount("o-1")).thenReturn(1);
+        when(outfitRepository.findVoteCount("o-1")).thenReturn(Optional.of(6));
 
-        Optional<OutfitEntity> updated = outfitService.upvote("upvote-me");
-        assertTrue(updated.isPresent());
-        assertEquals(11, updated.get().getDisplayCount());
+        Optional<OutfitService.VoteResult> result = outfitService.toggleVote("o-1", "voter");
+
+        assertEquals(Optional.of(new OutfitService.VoteResult(true, 6)), result);
+        verify(outfitRepository, never()).deleteVote(any(), any());
+        verify(outfitRepository, never()).save(any());
+    }
+
+    @Test
+    void testToggleVoteRemovesExistingVote() {
+        when(outfitRepository.existsByIdAndDeletedFalse("o-1")).thenReturn(true);
+        when(outfitRepository.insertVote("o-1", "voter")).thenReturn(0);
+        when(outfitRepository.deleteVote("o-1", "voter")).thenReturn(1);
+        when(outfitRepository.findVoteCount("o-1")).thenReturn(Optional.of(4));
+
+        Optional<OutfitService.VoteResult> result = outfitService.toggleVote("o-1", "voter");
+
+        assertEquals(Optional.of(new OutfitService.VoteResult(false, 4)), result);
+        verify(outfitRepository).decrementVoteCount("o-1");
+        verify(outfitRepository, never()).incrementVoteCount(any());
+    }
+
+    @Test
+    void testToggleVoteOnDeletedOutfit() {
+        when(outfitRepository.existsByIdAndDeletedFalse("gone")).thenReturn(false);
+
+        assertTrue(outfitService.toggleVote("gone", "voter").isEmpty());
+        verify(outfitRepository, never()).insertVote(any(), any());
+        verify(outfitRepository, never()).incrementVoteCount(any());
+    }
+
+    @Test
+    void testToggleVoteOutfitDeletedMidVote() {
+        when(outfitRepository.existsByIdAndDeletedFalse("o-1")).thenReturn(true);
+        when(outfitRepository.insertVote("o-1", "voter")).thenReturn(1);
+        when(outfitRepository.incrementVoteCount("o-1")).thenReturn(0);
+
+        assertTrue(outfitService.toggleVote("o-1", "voter").isEmpty());
+        verify(outfitRepository).deleteVote("o-1", "voter");
+    }
+
+    @Test
+    void testRecordShown() {
+        outfitService.recordShown("o-1");
+        verify(outfitRepository).incrementDisplayCount("o-1");
     }
 
     @Test
