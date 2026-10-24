@@ -9,13 +9,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -24,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class PostgresIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine")
             .withDatabaseName("fashionscape_test")
             .withUsername("fsbot_test")
             .withPassword("fsbot_test");
@@ -69,7 +70,7 @@ class PostgresIntegrationTest {
     @DisplayName("Verify PostgreSQL flyway schema and OutfitRepository CRUD with native random query")
     void testOutfitRepositoryPostgres() {
         OutfitEntity outfit1 = new OutfitEntity(
-                "pg-outfit-1",
+                null,
                 "https://media.fashionscape.org/outfits/pg-outfit-1.png",
                 "111222333444",
                 "saradomin",
@@ -86,7 +87,7 @@ class PostgresIntegrationTest {
         );
 
         OutfitEntity outfit2 = new OutfitEntity(
-                "pg-outfit-2",
+                null,
                 "https://media.fashionscape.org/outfits/pg-outfit-2.png",
                 "222333444555",
                 "zamorak",
@@ -103,7 +104,7 @@ class PostgresIntegrationTest {
         );
 
         OutfitEntity deletedOutfit = new OutfitEntity(
-                "pg-outfit-3",
+                null,
                 "https://media.fashionscape.org/outfits/pg-outfit-3.png",
                 "111222333444",
                 "saradomin",
@@ -120,24 +121,25 @@ class PostgresIntegrationTest {
         );
 
         outfitRepository.saveAll(List.of(outfit1, outfit2, deletedOutfit));
+        UUID outfit1Id = outfit1.getId();
 
         assertEquals(2, outfitRepository.countByDeletedFalse());
 
-        Optional<OutfitEntity> found = outfitRepository.findByIdAndDeletedFalse("pg-outfit-1");
+        Optional<OutfitEntity> found = outfitRepository.findByIdAndDeletedFalse(outfit1Id);
         assertTrue(found.isPresent());
         assertEquals("saradomin", found.get().getTag());
         assertEquals("SaradominKnight", found.get().getDiscordName());
 
-        Optional<OutfitEntity> deleted = outfitRepository.findByIdAndDeletedFalse("pg-outfit-3");
+        Optional<OutfitEntity> deleted = outfitRepository.findByIdAndDeletedFalse(deletedOutfit.getId());
         assertTrue(deleted.isEmpty());
 
         List<OutfitEntity> bySubmitter = outfitRepository.findBySubmitterAndDeletedFalse("111222333444");
         assertEquals(1, bySubmitter.size());
-        assertEquals("pg-outfit-1", bySubmitter.getFirst().getId());
+        assertEquals(outfit1Id, bySubmitter.getFirst().getId());
 
         List<OutfitEntity> byTag = outfitRepository.findByTagIgnoreCaseAndDeletedFalse("SARADOMIN");
         assertEquals(1, byTag.size());
-        assertEquals("pg-outfit-1", byTag.getFirst().getId());
+        assertEquals(outfit1Id, byTag.getFirst().getId());
 
         // Test native Postgres random query
         Optional<OutfitEntity> random = outfitRepository.findRandomOutfit();

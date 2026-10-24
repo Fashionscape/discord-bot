@@ -4,27 +4,34 @@ import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+// Use the PostgreSQL-mode H2 from application.yml, which the migrations need, not a plain embedded one
 @DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class OutfitRepositoryTest {
 
     @Autowired
     private OutfitRepository outfitRepository;
+
+    private UUID outfit1Id;
+    private UUID deletedOutfitId;
 
     @BeforeEach
     void setUp() {
         outfitRepository.deleteAll();
 
         OutfitEntity outfit1 = new OutfitEntity(
-                "outfit-1",
+                null,
                 "https://media.fashionscape.org/outfit1.png",
                 "user-100",
                 "zammy",
@@ -41,7 +48,7 @@ class OutfitRepositoryTest {
         );
 
         OutfitEntity outfit2 = new OutfitEntity(
-                "outfit-2",
+                null,
                 "https://media.fashionscape.org/outfit2.png",
                 "user-200",
                 "sara",
@@ -58,7 +65,7 @@ class OutfitRepositoryTest {
         );
 
         OutfitEntity deletedOutfit = new OutfitEntity(
-                "outfit-deleted",
+                null,
                 "https://media.fashionscape.org/deleted.png",
                 "user-100",
                 "guthix",
@@ -75,6 +82,8 @@ class OutfitRepositoryTest {
         );
 
         outfitRepository.saveAll(List.of(outfit1, outfit2, deletedOutfit));
+        outfit1Id = outfit1.getId();
+        deletedOutfitId = deletedOutfit.getId();
     }
 
     @Test
@@ -85,11 +94,11 @@ class OutfitRepositoryTest {
 
     @Test
     void testFindByIdAndDeletedFalse() {
-        Optional<OutfitEntity> outfit = outfitRepository.findByIdAndDeletedFalse("outfit-1");
+        Optional<OutfitEntity> outfit = outfitRepository.findByIdAndDeletedFalse(outfit1Id);
         assertTrue(outfit.isPresent());
         assertEquals("user-100", outfit.get().getSubmitter());
 
-        Optional<OutfitEntity> deleted = outfitRepository.findByIdAndDeletedFalse("outfit-deleted");
+        Optional<OutfitEntity> deleted = outfitRepository.findByIdAndDeletedFalse(deletedOutfitId);
         assertFalse(deleted.isPresent());
     }
 
@@ -97,14 +106,14 @@ class OutfitRepositoryTest {
     void testFindBySubmitterAndDeletedFalse() {
         List<OutfitEntity> outfits = outfitRepository.findBySubmitterAndDeletedFalse("user-100");
         assertEquals(1, outfits.size());
-        assertEquals("outfit-1", outfits.get(0).getId());
+        assertEquals(outfit1Id, outfits.get(0).getId());
     }
 
     @Test
     void testFindByTagIgnoreCaseAndDeletedFalse() {
         List<OutfitEntity> outfits = outfitRepository.findByTagIgnoreCaseAndDeletedFalse("ZAMMY");
         assertEquals(1, outfits.size());
-        assertEquals("outfit-1", outfits.get(0).getId());
+        assertEquals(outfit1Id, outfits.get(0).getId());
     }
 
     @Test
@@ -122,17 +131,22 @@ class OutfitRepositoryTest {
     @Test
     void testOutfitRequiresServerAndChannelIds() {
         assertThrows(NullPointerException.class, () -> new OutfitEntity(
-                "no-server", "https://example.com/x.png", "user-1", "osrs", null, "Name",
+                null, "https://example.com/x.png", "user-1", "osrs", null, "Name",
                 Instant.now(), Instant.now(), false, false, 0, null, null, "channel-1"));
         assertThrows(NullPointerException.class, () -> new OutfitEntity(
-                "no-channel", "https://example.com/x.png", "user-1", "osrs", null, "Name",
+                null, "https://example.com/x.png", "user-1", "osrs", null, "Name",
                 Instant.now(), Instant.now(), false, false, 0, null, "server-1", null));
+    }
+
+    @Test
+    void testSaveGeneratesUuid() {
+        assertNotNull(outfit1Id);
+        assertNotEquals(outfit1Id, deletedOutfitId);
     }
 
     @Test
     void testDatabaseRejectsOutfitWithoutServerId() {
         OutfitEntity outfit = new OutfitEntity();
-        outfit.setId("orphan");
         outfit.setLink("https://example.com/orphan.png");
         outfit.setSubmitter("user-1");
         outfit.setChannelId("channel-1");
@@ -143,7 +157,6 @@ class OutfitRepositoryTest {
     @Test
     void testDatabaseRejectsOutfitWithoutChannelId() {
         OutfitEntity outfit = new OutfitEntity();
-        outfit.setId("orphan");
         outfit.setLink("https://example.com/orphan.png");
         outfit.setSubmitter("user-1");
         outfit.setServerId("server-1");

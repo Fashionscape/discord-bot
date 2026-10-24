@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Instant;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,7 +55,7 @@ class PermissionServiceTest {
         when(staticPermissionRepository.existsByUserIdAndPermission(BOT_ADMIN, PermissionService.ADMIN)).thenReturn(true);
         when(staticPermissionRepository.existsByUserIdAndPermission(BOT_STAFF, PermissionService.STAFF)).thenReturn(true);
 
-        outfit = new OutfitEntity("outfit-1", "https://media.fashionscape.org/outfits/outfit-1.png", SUBMITTER,
+        outfit = new OutfitEntity(UUID.randomUUID(), "https://media.fashionscape.org/outfits/outfit-1.png", SUBMITTER,
                 "osrs", null, "Player", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
 
         when(member.getGuild()).thenReturn(guild);

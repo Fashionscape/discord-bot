@@ -24,7 +24,7 @@ Welcome to the **FashionScape Bot** repository. This document serves as a compre
 | **Language & Runtime** | Java 21 LTS | Configured via `java.toolchain.languageVersion = 21` in `build.gradle`. Uses Java 21 Virtual Threads. |
 | **Build System** | Gradle (Wrapper 8.10+) | Gradle wrapper updated for full Java 21 compatibility. |
 | **Discord Library** | JDA (`5.1.0`) | Discord API v10 with native slash commands, button interactions, and virtual thread event loop. Javacord retained temporarily for transition. |
-| **Application Framework** | Spring Boot (`3.3.4`) | Dependency injection, `@ConfigurationProperties`, Actuator health/metrics, and Spring Data JPA. |
+| **Application Framework** | Spring Boot (`4.1.2`) | Dependency injection, `@ConfigurationProperties`, Actuator health/metrics, and Spring Data JPA. |
 | **Database** | PostgreSQL 16+ & SQLite | PostgreSQL managed via Flyway migrations (`V1__init_schema.sql`) and Spring Data JPA; SQLite retained for legacy migration CLI. |
 | **Media Storage** | SeaweedFS S3 gateway, accessed with the AWS SDK for Java v2 (`software.amazon.awssdk:s3`) | Self-hosted S3 object storage for gallery outfit images with public CDN URL resolution; automated Imgur rehost CLI. See `docs/adr/0001-seaweedfs-object-storage.md`. |
 | **Configuration** | `application.yml` + `@ConfigurationProperties` | Centralized type-safe configuration in `BotProperties` (`fsbot.discord.*`, `fsbot.seaweed.*`). |

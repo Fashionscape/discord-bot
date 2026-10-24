@@ -1,7 +1,8 @@
 package dev.salmonllama.fsbot.database.models;
 
 import dev.salmonllama.fsbot.database.DatabaseModel;
-import dev.salmonllama.fsbot.services.IdService;
+
+import java.util.UUID;
 
 public class RoleGroup extends DatabaseModel {
     public final String id;
@@ -10,6 +11,6 @@ public class RoleGroup extends DatabaseModel {
     public String requiredRole;
 
     public RoleGroup() {
-        this.id = IdService.generateShort();
+        this.id = UUID.randomUUID().toString();
     }
 }

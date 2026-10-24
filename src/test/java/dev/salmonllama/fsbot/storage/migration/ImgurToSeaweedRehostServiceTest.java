@@ -18,6 +18,7 @@ import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,8 +49,8 @@ class ImgurToSeaweedRehostServiceTest {
 
     @Test
     void rehostAllDryRunDoesNotUploadOrUpdateDatabase() {
-        OutfitEntity outfit1 = new OutfitEntity("id-1", "https://i.imgur.com/abc.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
-        OutfitEntity outfit2 = new OutfitEntity("id-2", "https://i.imgur.com/xyz.jpg", "user2", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        OutfitEntity outfit1 = new OutfitEntity(UUID.randomUUID(), "https://i.imgur.com/abc.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        OutfitEntity outfit2 = new OutfitEntity(UUID.randomUUID(), "https://i.imgur.com/xyz.jpg", "user2", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
 
         when(outfitRepository.findByLinkContaining("imgur.com")).thenReturn(List.of(outfit1, outfit2));
 
@@ -66,7 +67,7 @@ class ImgurToSeaweedRehostServiceTest {
 
     @Test
     void rehostAllLiveSuccessfullyRehostsOutfits() throws Exception {
-        OutfitEntity outfit = new OutfitEntity("id-100", "https://i.imgur.com/test.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("00000000-0000-4000-8000-000000000100"), "https://i.imgur.com/test.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
         when(outfitRepository.findByLinkContaining("imgur.com")).thenReturn(List.of(outfit));
 
         byte[] fakeData = new byte[]{10, 20, 30};
@@ -77,23 +78,23 @@ class ImgurToSeaweedRehostServiceTest {
         doReturn(httpResponse).when(httpClient).send(any(HttpRequest.class), any());
 
         when(storageService.resolveExtension("image/png", "https://i.imgur.com/test.png")).thenReturn("png");
-        when(storageService.buildOutfitObjectName("id-100", "png")).thenReturn("outfits/id-100.png");
+        when(storageService.buildOutfitObjectName("00000000-0000-4000-8000-000000000100", "png")).thenReturn("outfits/00000000-0000-4000-8000-000000000100.png");
 
-        UploadResult uploadResult = new UploadResult("outfits/id-100.png", "https://media.fashionscape.org/outfits/id-100.png", "fashionscape-outfits", fakeData.length, "image/png");
-        when(storageService.upload(eq("outfits/id-100.png"), eq(fakeData), eq("image/png"))).thenReturn(uploadResult);
+        UploadResult uploadResult = new UploadResult("outfits/00000000-0000-4000-8000-000000000100.png", "https://media.fashionscape.org/outfits/00000000-0000-4000-8000-000000000100.png", "fashionscape-outfits", fakeData.length, "image/png");
+        when(storageService.upload(eq("outfits/00000000-0000-4000-8000-000000000100.png"), eq(fakeData), eq("image/png"))).thenReturn(uploadResult);
 
         ImgurToSeaweedRehostService.RehostReport report = rehostService.rehostAll(false, 0, 0);
 
         assertEquals(1, report.totalFound());
         assertEquals(1, report.succeeded());
         assertEquals(0, report.failed());
-        assertEquals("https://media.fashionscape.org/outfits/id-100.png", outfit.getLink());
+        assertEquals("https://media.fashionscape.org/outfits/00000000-0000-4000-8000-000000000100.png", outfit.getLink());
         verify(outfitRepository).save(outfit);
     }
 
     @Test
     void rehostAllHandlesHttp404Gracefully() throws Exception {
-        OutfitEntity outfit = new OutfitEntity("id-404", "https://i.imgur.com/deleted.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        OutfitEntity outfit = new OutfitEntity(UUID.fromString("00000000-0000-4000-8000-000000000404"), "https://i.imgur.com/deleted.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
         when(outfitRepository.findByLinkContaining("imgur.com")).thenReturn(List.of(outfit));
 
         when(httpResponse.statusCode()).thenReturn(404);
@@ -105,7 +106,7 @@ class ImgurToSeaweedRehostServiceTest {
         assertEquals(0, report.succeeded());
         assertEquals(1, report.failed());
         assertEquals(1, report.failures().size());
-        assertEquals("id-404", report.failures().get(0).outfitId());
+        assertEquals("00000000-0000-4000-8000-000000000404", report.failures().get(0).outfitId());
         assertTrue(report.failures().get(0).reason().contains("404"));
         assertEquals("https://i.imgur.com/deleted.png", outfit.getLink()); // unmodified
         verify(outfitRepository, never()).save(any(OutfitEntity.class));
@@ -113,7 +114,7 @@ class ImgurToSeaweedRehostServiceTest {
 
     @Test
     void rehostAllHandlesNetworkExceptionGracefully() throws Exception {
-        OutfitEntity outfit = new OutfitEntity("id-err", "https://i.imgur.com/error.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        OutfitEntity outfit = new OutfitEntity(UUID.randomUUID(), "https://i.imgur.com/error.png", "user1", "tag", null, "User", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
         when(outfitRepository.findByLinkContaining("imgur.com")).thenReturn(List.of(outfit));
 
         when(httpClient.send(any(HttpRequest.class), any())).thenThrow(new IOException("Connection timed out"));
@@ -130,9 +131,9 @@ class ImgurToSeaweedRehostServiceTest {
 
     @Test
     void rehostAllRespectsLimit() {
-        OutfitEntity outfit1 = new OutfitEntity("id-1", "https://i.imgur.com/1.png", "u", "t", null, "n", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
-        OutfitEntity outfit2 = new OutfitEntity("id-2", "https://i.imgur.com/2.png", "u", "t", null, "n", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
-        OutfitEntity outfit3 = new OutfitEntity("id-3", "https://i.imgur.com/3.png", "u", "t", null, "n", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        OutfitEntity outfit1 = new OutfitEntity(UUID.randomUUID(), "https://i.imgur.com/1.png", "u", "t", null, "n", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        OutfitEntity outfit2 = new OutfitEntity(UUID.randomUUID(), "https://i.imgur.com/2.png", "u", "t", null, "n", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
+        OutfitEntity outfit3 = new OutfitEntity(UUID.randomUUID(), "https://i.imgur.com/3.png", "u", "t", null, "n", Instant.now(), Instant.now(), false, false, 0, null, "server-1", "channel-1");
 
         when(outfitRepository.findByLinkContaining("imgur.com")).thenReturn(new java.util.ArrayList<>(List.of(outfit1, outfit2, outfit3)));
 
