@@ -41,8 +41,8 @@ class MinioStorageServiceTest {
     void setUp() {
         properties = new BotProperties(
                 new BotProperties.DiscordProperties("test-token", 123456L, "guild-1", ""),
-                new BotProperties.MinioProperties(
-                        "http://localhost:9000",
+                new BotProperties.SeaweedProperties(
+                        "http://localhost:8333",
                         "minioadmin",
                         "minioadmin",
                         "test-bucket",

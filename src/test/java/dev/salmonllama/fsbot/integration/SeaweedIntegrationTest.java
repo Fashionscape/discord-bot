@@ -11,7 +11,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MinIOContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -26,18 +25,18 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
 @SpringBootTest
-class MinioIntegrationTest {
+class SeaweedIntegrationTest {
 
     @Container
-    static MinIOContainer minio = MinioTestContainer.create();
+    static SeaweedContainer seaweed = new SeaweedContainer();
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("fsbot.minio.endpoint", minio::getS3URL);
-        registry.add("fsbot.minio.access-key", minio::getUserName);
-        registry.add("fsbot.minio.secret-key", minio::getPassword);
-        registry.add("fsbot.minio.bucket", () -> "fsbot-integration-test");
-        registry.add("fsbot.minio.public-url", () -> "https://media.fashionscape.org");
+        registry.add("fsbot.seaweed.endpoint", seaweed::getS3URL);
+        registry.add("fsbot.seaweed.access-key", seaweed::getAccessKey);
+        registry.add("fsbot.seaweed.secret-key", seaweed::getSecretKey);
+        registry.add("fsbot.seaweed.bucket", () -> "fsbot-integration-test");
+        registry.add("fsbot.seaweed.public-url", () -> "https://media.fashionscape.org");
         registry.add("fsbot.discord.token", () -> "");
     }
 
@@ -57,7 +56,7 @@ class MinioIntegrationTest {
 
     private int anonymousGetStatus(String objectName) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(minio.getS3URL() + "/fsbot-integration-test/" + objectName))
+                .uri(URI.create(seaweed.getS3URL() + "/fsbot-integration-test/" + objectName))
                 .GET()
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
@@ -88,9 +87,9 @@ class MinioIntegrationTest {
     }
 
     @Test
-    @DisplayName("Verify MinIO bucket initialization, upload, retrieve, and delete against real MinIO container")
+    @DisplayName("Verify bucket initialization, upload, retrieve, and delete against real SeaweedFS container")
     void testMinioLifecycle() throws Exception {
-        byte[] payload = "Hello MinIO Integration Test!".getBytes(StandardCharsets.UTF_8);
+        byte[] payload = "Hello SeaweedFS Integration Test!".getBytes(StandardCharsets.UTF_8);
         String objectName = "test/integration-file.txt";
 
         // 1. Upload object

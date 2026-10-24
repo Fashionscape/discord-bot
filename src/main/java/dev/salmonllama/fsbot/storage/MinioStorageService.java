@@ -19,6 +19,10 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Object storage for outfit images. The bot runs SeaweedFS and talks to its S3 gateway through the
+ * MinIO Java client, which works with any S3-compatible server (see docs/adr/0001-seaweedfs-object-storage.md).
+ */
 @Service
 public class MinioStorageService {
 
@@ -49,7 +53,7 @@ public class MinioStorageService {
     }
 
     /**
-     * Prepares the bucket at startup. A failure (MinIO not reachable yet) is logged and
+     * Prepares the bucket at startup. A failure (SeaweedFS not reachable yet) is logged and
      * retried on the first upload, so it never stops the bot from starting.
      */
     @PostConstruct
@@ -57,8 +61,8 @@ public class MinioStorageService {
         try {
             prepareBucket();
         } catch (Exception e) {
-            logger.warn("Could not prepare MinIO bucket '{}' at startup; will retry on first upload: {}",
-                    properties.minio().bucket(), e.getMessage());
+            logger.warn("Could not prepare SeaweedFS bucket '{}' at startup; will retry on first upload: {}",
+                    properties.seaweed().bucket(), e.getMessage());
         }
     }
 
@@ -73,12 +77,12 @@ public class MinioStorageService {
     }
 
     void applyPublicReadPolicy() throws Exception {
-        String bucket = properties.minio().bucket();
+        String bucket = properties.seaweed().bucket();
         minioClient.setBucketPolicy(SetBucketPolicyArgs.builder()
                 .bucket(bucket)
                 .config(publicReadPolicy(bucket))
                 .build());
-        logger.info("MinIO bucket '{}' policy set: public read on '{}*' only", bucket, PUBLIC_PREFIX);
+        logger.info("SeaweedFS bucket '{}' policy set: public read on '{}*' only", bucket, PUBLIC_PREFIX);
     }
 
     static String publicReadPolicy(String bucket) {
@@ -98,21 +102,21 @@ public class MinioStorageService {
      * Checks if the configured bucket exists, and creates it if it does not.
      */
     public void ensureBucketExists() throws Exception {
-        String bucket = properties.minio().bucket();
+        String bucket = properties.seaweed().bucket();
         boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
         if (!exists) {
             minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
-            logger.info("MinIO bucket '{}' created successfully", bucket);
+            logger.info("SeaweedFS bucket '{}' created successfully", bucket);
         }
     }
 
     /**
-     * Upload an arbitrary input stream to MinIO.
+     * Upload an arbitrary input stream to SeaweedFS.
      */
     public UploadResult upload(String objectName, InputStream inputStream, long size, String contentType) throws Exception {
         ensureReady();
 
-        String bucket = properties.minio().bucket();
+        String bucket = properties.seaweed().bucket();
         long partSize = size >= 0 ? -1 : 10 * 1024 * 1024; // 10MB chunk size for streams of unknown length
         String resolvedContentType = (contentType != null && !contentType.isBlank()) ? contentType : "application/octet-stream";
 
@@ -131,7 +135,7 @@ public class MinioStorageService {
     }
 
     /**
-     * Upload byte array data to MinIO.
+     * Upload byte array data to SeaweedFS.
      */
     public UploadResult upload(String objectName, byte[] data, String contentType) throws Exception {
         try (ByteArrayInputStream bais = new ByteArrayInputStream(data)) {
@@ -158,7 +162,7 @@ public class MinioStorageService {
     }
 
     /**
-     * Ingests an image directly from a source URL (e.g. Discord CDN or Imgur) and uploads it to MinIO.
+     * Ingests an image directly from a source URL (e.g. Discord CDN or Imgur) and uploads it to SeaweedFS.
      */
     public UploadResult uploadOutfitFromUrl(String outfitId, String sourceUrl) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
@@ -184,10 +188,10 @@ public class MinioStorageService {
     }
 
     /**
-     * Streams an object from MinIO. Caller is responsible for closing the returned InputStream.
+     * Streams an object from SeaweedFS. Caller is responsible for closing the returned InputStream.
      */
     public InputStream getObject(String objectName) throws Exception {
-        String bucket = properties.minio().bucket();
+        String bucket = properties.seaweed().bucket();
         return minioClient.getObject(
                 GetObjectArgs.builder()
                         .bucket(bucket)
@@ -197,7 +201,7 @@ public class MinioStorageService {
     }
 
     /**
-     * Reads all bytes of an object from MinIO.
+     * Reads all bytes of an object from SeaweedFS.
      */
     public byte[] getObjectBytes(String objectName) throws Exception {
         try (InputStream stream = getObject(objectName)) {
@@ -206,10 +210,10 @@ public class MinioStorageService {
     }
 
     /**
-     * Deletes an object from MinIO.
+     * Deletes an object from SeaweedFS.
      */
     public void deleteObject(String objectName) throws Exception {
-        String bucket = properties.minio().bucket();
+        String bucket = properties.seaweed().bucket();
         minioClient.removeObject(
                 RemoveObjectArgs.builder()
                         .bucket(bucket)
@@ -249,7 +253,7 @@ public class MinioStorageService {
             logger.debug("Object '{}' was already moved to '{}'", from, to);
             return;
         }
-        String bucket = properties.minio().bucket();
+        String bucket = properties.seaweed().bucket();
         minioClient.copyObject(CopyObjectArgs.builder()
                 .bucket(bucket)
                 .object(to)
@@ -260,10 +264,10 @@ public class MinioStorageService {
     }
 
     /**
-     * Checks if an object exists in MinIO.
+     * Checks if an object exists in SeaweedFS.
      */
     public boolean objectExists(String objectName) {
-        String bucket = properties.minio().bucket();
+        String bucket = properties.seaweed().bucket();
         try {
             minioClient.statObject(
                     StatObjectArgs.builder()
@@ -285,10 +289,10 @@ public class MinioStorageService {
     }
 
     /**
-     * Resolves the public CDN/reverse-proxy URL for a given MinIO object key.
+     * Resolves the public CDN/reverse-proxy URL for a given SeaweedFS object key.
      */
     public String getPublicUrl(String objectName) {
-        String baseUrl = properties.minio().publicUrl().replaceAll("/+$", "");
+        String baseUrl = properties.seaweed().publicUrl().replaceAll("/+$", "");
         String cleanName = objectName.startsWith("/") ? objectName.substring(1) : objectName;
         return baseUrl + "/" + cleanName;
     }
@@ -300,7 +304,7 @@ public class MinioStorageService {
         if (publicUrl == null) {
             return Optional.empty();
         }
-        String baseUrl = properties.minio().publicUrl().replaceAll("/+$", "");
+        String baseUrl = properties.seaweed().publicUrl().replaceAll("/+$", "");
         if (publicUrl.startsWith(baseUrl + "/")) {
             return Optional.of(publicUrl.substring(baseUrl.length() + 1));
         }

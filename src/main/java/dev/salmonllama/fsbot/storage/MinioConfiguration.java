@@ -16,12 +16,12 @@ public class MinioConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public MinioClient minioClient(BotProperties properties) {
-        BotProperties.MinioProperties minioProps = properties.minio();
-        logger.info("Configuring MinIO client connecting to endpoint: {}", minioProps.endpoint());
+        BotProperties.SeaweedProperties seaweedProps = properties.seaweed();
+        logger.info("Configuring MinIO client for SeaweedFS S3 endpoint: {}", seaweedProps.endpoint());
 
         return MinioClient.builder()
-                .endpoint(minioProps.endpoint())
-                .credentials(minioProps.accessKey(), minioProps.secretKey())
+                .endpoint(seaweedProps.endpoint())
+                .credentials(seaweedProps.accessKey(), seaweedProps.secretKey())
                 .build();
     }
 }

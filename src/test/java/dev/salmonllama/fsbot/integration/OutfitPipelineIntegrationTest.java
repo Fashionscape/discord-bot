@@ -15,7 +15,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MinIOContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -38,7 +37,7 @@ class OutfitPipelineIntegrationTest {
             .withPassword("fsbot_test");
 
     @Container
-    static MinIOContainer minio = MinioTestContainer.create();
+    static SeaweedContainer seaweed = new SeaweedContainer();
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
@@ -51,12 +50,12 @@ class OutfitPipelineIntegrationTest {
         registry.add("spring.flyway.locations", () -> "classpath:db/migration");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
 
-        // MinIO config
-        registry.add("fsbot.minio.endpoint", minio::getS3URL);
-        registry.add("fsbot.minio.access-key", minio::getUserName);
-        registry.add("fsbot.minio.secret-key", minio::getPassword);
-        registry.add("fsbot.minio.bucket", () -> "fashionscape-pipeline");
-        registry.add("fsbot.minio.public-url", () -> "https://media.fashionscape.org");
+        // SeaweedFS config
+        registry.add("fsbot.seaweed.endpoint", seaweed::getS3URL);
+        registry.add("fsbot.seaweed.access-key", seaweed::getAccessKey);
+        registry.add("fsbot.seaweed.secret-key", seaweed::getSecretKey);
+        registry.add("fsbot.seaweed.bucket", () -> "fashionscape-pipeline");
+        registry.add("fsbot.seaweed.public-url", () -> "https://media.fashionscape.org");
 
         // Discord config
         registry.add("fsbot.discord.token", () -> "");
@@ -85,7 +84,7 @@ class OutfitPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("End-to-end pipeline: MinIO asset upload and PostgreSQL persistence, retrieval, voting, and deletion")
+    @DisplayName("End-to-end pipeline: SeaweedFS asset upload and PostgreSQL persistence, retrieval, voting, and deletion")
     void testEndToEndOutfitPipeline() throws Exception {
         // 1. Configure a gallery channel
         String guildId = "guild-777";
@@ -100,7 +99,7 @@ class OutfitPipelineIntegrationTest {
         galleryChannelRepository.save(galleryChannel);
         assertTrue(galleryChannelRepository.existsByChannelIdAndEnabledTrue(channelId));
 
-        // 2. Upload outfit image to MinIO
+        // 2. Upload outfit image to SeaweedFS
         String outfitId = "fit-pipeline-1";
         byte[] imageBytes = "fake-png-image-content".getBytes(StandardCharsets.UTF_8);
         UploadResult uploadResult = minioStorageService.uploadOutfit(outfitId, imageBytes, "image/png");
@@ -139,7 +138,7 @@ class OutfitPipelineIntegrationTest {
         assertEquals(0, entity.getDisplayCount());
         assertFalse(entity.isDeleted());
 
-        // Verify image bytes can be read back from MinIO using public URL key extraction
+        // Verify image bytes can be read back from SeaweedFS using public URL key extraction
         Optional<String> objectKey = minioStorageService.extractObjectKey(entity.getLink());
         assertTrue(objectKey.isPresent());
         byte[] readBackBytes = minioStorageService.getObjectBytes(objectKey.get());
@@ -183,7 +182,7 @@ class OutfitPipelineIntegrationTest {
         assertTrue(minioStorageService.objectExists("outfits/fit-pipeline-1.png"));
         assertFalse(minioStorageService.objectExists("deleted/outfits/fit-pipeline-1.png"));
 
-        // Clean up MinIO object
+        // Clean up SeaweedFS object
         minioStorageService.deleteObject("outfits/fit-pipeline-1.png");
         assertFalse(minioStorageService.objectExists("outfits/fit-pipeline-1.png"));
     }

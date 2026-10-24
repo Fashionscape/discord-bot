@@ -26,11 +26,11 @@ Welcome to the **FashionScape Bot** repository. This document serves as a compre
 | **Discord Library** | JDA (`5.1.0`) | Discord API v10 with native slash commands, button interactions, and virtual thread event loop. Javacord retained temporarily for transition. |
 | **Application Framework** | Spring Boot (`3.3.4`) | Dependency injection, `@ConfigurationProperties`, Actuator health/metrics, and Spring Data JPA. |
 | **Database** | PostgreSQL 16+ & SQLite | PostgreSQL managed via Flyway migrations (`V1__init_schema.sql`) and Spring Data JPA; SQLite retained for legacy migration CLI. |
-| **Media Storage** | MinIO S3 (`io.minio:minio:8.5.12`) | Self-hosted S3 object storage for gallery outfit images with public CDN URL resolution; automated Imgur-to-MinIO migration CLI. |
-| **Configuration** | `application.yml` + `@ConfigurationProperties` | Centralized type-safe configuration in `BotProperties` (`fsbot.discord.*`, `fsbot.minio.*`). |
-| **JSON & HTTP Clients** | Java 21 `HttpClient`, OkHttp 4, Gson 2.11 | Java 21 native client for MinIO ingestion and external APIs; OkHttp/Gson in legacy utilities. |
+| **Media Storage** | SeaweedFS S3 gateway, accessed with the MinIO Java client (`io.minio:minio:8.5.12`) | Self-hosted S3 object storage for gallery outfit images with public CDN URL resolution; automated Imgur rehost CLI. See `docs/adr/0001-seaweedfs-object-storage.md`. |
+| **Configuration** | `application.yml` + `@ConfigurationProperties` | Centralized type-safe configuration in `BotProperties` (`fsbot.discord.*`, `fsbot.seaweed.*`). |
+| **JSON & HTTP Clients** | Java 21 `HttpClient`, OkHttp 4, Gson 2.11 | Java 21 native client for image ingestion and external APIs; OkHttp/Gson in legacy utilities. |
 | **Logging** | SLF4J with Logback | Structured console logging configured in `src/main/resources/logback.xml`. |
-| **Containerization** | Docker & Docker Compose | Multi-stage build (`gradle:jdk21` -> `eclipse-temurin:21-jre`); turnkey `docker-compose.yml` with Postgres and MinIO. |
+| **Containerization** | Docker & Docker Compose | Multi-stage build (`gradle:jdk21` -> `eclipse-temurin:21-jre`); turnkey `docker-compose.yml` with Postgres and SeaweedFS. |
 
 ---
 
@@ -39,7 +39,7 @@ Welcome to the **FashionScape Bot** repository. This document serves as a compre
 ```
 .
 ├── Dockerfile                   # Multi-stage production container build (Temurin 21)
-├── docker-compose.yml           # Local dev orchestrating Bot, Postgres 16, and MinIO
+├── docker-compose.yml           # Local dev orchestrating Bot, Postgres 16, and SeaweedFS
 ├── example.env                  # Environment template for all bot credentials & storage
 ├── build.gradle                 # Gradle dependencies and build plugins
 ├── settings.gradle              # Gradle project settings
@@ -56,7 +56,7 @@ Welcome to the **FashionScape Bot** repository. This document serves as a compre
 │   │   │   │   │   └── general/        # Modern slash commands (PingSlashCommand, etc.)
 │   │   │   │   ├── components/         # ButtonHandler and interactive UI component routing
 │   │   │   │   └── listeners/          # GalleryEventListener with interactive voting & deletion buttons
-│   │   │   ├── storage/                # MinIO Object Storage
+│   │   │   ├── storage/                # Object storage (SeaweedFS via the MinIO client)
 │   │   │   │   ├── MinioConfiguration.java # MinioClient Spring bean configuration
 │   │   │   │   ├── MinioStorageService.java# Asset upload, stream, and CDN public URL resolution
 │   │   │   │   └── migration/          # ImgurToMinioRehostCli & ImgurToMinioRehostService
@@ -95,7 +95,7 @@ The primary Discord interface has migrated from legacy Javacord text parsing to 
 1. **Submission (`GalleryEventListener`):**
    - Listens for messages with image attachments in channels registered in `GalleryChannelRepository`.
    - Filters out bot authors, webhooks, non-guild messages, and blocked users/servers.
-   - Streams image attachments directly into MinIO S3 via `MinioStorageService.uploadOutfitFromUrl()`.
+   - Streams image attachments directly into SeaweedFS via `MinioStorageService.uploadOutfitFromUrl()`.
    - Persists an `OutfitEntity` into PostgreSQL via `OutfitRepository`.
 2. **Interactive Showcase & Voting Buttons:**
    - Automatically posts an outfit showcase embed into the gallery channel with interactive action row buttons:
@@ -107,9 +107,9 @@ The primary Discord interface has migrated from legacy Javacord text parsing to 
 - **Data Access:** Spring Data JPA repositories with HikariCP connection pooling.
 - **Legacy Migration:** `SqliteToPostgresMigrationService` and `SqliteToPostgresMigrationCli` provide safe migration of legacy `fsbot.db` records into PostgreSQL.
 
-### 4.4 Object Storage Architecture (MinIO S3)
+### 4.4 Object Storage Architecture (SeaweedFS S3)
 - **`MinioStorageService`:** Configured via `MinioClient` bean in `MinioConfiguration`. Handles bucket initialization, image stream upload, extension resolution, existence checks, and public CDN URL formatting (`https://media.fashionscape.org/outfits/{id}.png`).
-- **`ImgurToMinioRehostCli` / `ImgurToMinioRehostService`:** Standalone CLI tool to scan existing outfit records pointing to Imgur, download images, re-upload them to MinIO, and update PostgreSQL URLs.
+- **`ImgurToMinioRehostCli` / `ImgurToMinioRehostService`:** Standalone CLI tool to scan existing outfit records pointing to Imgur, download images, re-upload them to SeaweedFS, and update PostgreSQL URLs.
 
 ### 4.5 Security & Blocklist Subsystem
 - **`BlocklistService`:** Centralized service that verifies whether users or guilds are prohibited from bot commands and gallery submissions using `BlockedUserRepository` and `BlockedServerRepository`.
@@ -133,12 +133,12 @@ SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/fashionscape
 SPRING_DATASOURCE_USERNAME=fsbot
 SPRING_DATASOURCE_PASSWORD=fsbot
 
-# MinIO Object Storage
-MINIO_ENDPOINT=http://localhost:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
-MINIO_BUCKET=fashionscape-outfits
-MINIO_PUBLIC_URL=https://media.fashionscape.org
+# SeaweedFS Object Storage (S3 gateway)
+SEAWEED_ENDPOINT=http://localhost:8333
+SEAWEED_ACCESS_KEY=seaweedadmin
+SEAWEED_SECRET_KEY=seaweedadmin
+SEAWEED_BUCKET=fashionscape-outfits
+SEAWEED_PUBLIC_URL=https://media.fashionscape.org
 ```
 
 ---
@@ -155,7 +155,7 @@ When working in an Android Laptop / Linux VM environment:
 - **Java 21 LTS Runtime:** Ensure JDK 21 is active. Gradle tasks run via Gradle wrapper 8.10+.
 
 ### Running with Docker Compose
-The repository includes a turnkey `docker-compose.yml` orchestrating the bot with PostgreSQL and MinIO:
+The repository includes a turnkey `docker-compose.yml` orchestrating the bot with PostgreSQL and SeaweedFS:
 ```bash
 docker compose up -d
 ```
@@ -189,7 +189,7 @@ The project is executing the v3 modernization plan documented in `docs/v3_archit
   - Port OSRS & RS3 color search commands.
   - Port staff moderation and blocklist commands (`/block user`, `/block server`).
 - [x] **Phase 6: Integration Tests & Final Release (`feature/v3-phase6-testing`):**
-  - Testcontainers for PostgreSQL and MinIO end-to-end integration tests.
-  - Repository integration tests and MinIO storage upload/retrieval tests.
+  - Testcontainers for PostgreSQL and SeaweedFS end-to-end integration tests.
+  - Repository integration tests and SeaweedFS storage upload/retrieval tests.
   - End-to-end slash command dispatching and virtual thread concurrency verification.
   - Final integration ready for release.
