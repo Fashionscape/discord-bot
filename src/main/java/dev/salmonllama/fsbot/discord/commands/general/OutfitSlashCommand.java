@@ -131,8 +131,17 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
                 .queue();
     }
 
-    private void handleInfo(SlashCommandInteractionEvent event) {
+    /**
+     * Reads the "id" option. Outfit IDs are full UUIDs that people copy out of embeds, so this drops
+     * surrounding whitespace and the backticks the embeds show them in.
+     */
+    private static String outfitIdOption(SlashCommandInteractionEvent event) {
         String id = event.getOption("id", OptionMapping::getAsString);
+        return id == null ? null : id.strip().replace("`", "");
+    }
+
+    private void handleInfo(SlashCommandInteractionEvent event) {
+        String id = outfitIdOption(event);
         if (id == null || id.isBlank()) {
             event.reply("You must supply an outfit ID.").setEphemeral(true).queue();
             return;
@@ -191,7 +200,7 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
     }
 
     private void handleDelete(SlashCommandInteractionEvent event) {
-        String id = event.getOption("id", OptionMapping::getAsString);
+        String id = outfitIdOption(event);
         if (id == null || id.isBlank()) {
             event.reply("You must provide an outfit ID.").setEphemeral(true).queue();
             return;
@@ -232,7 +241,7 @@ public class OutfitSlashCommand implements SlashCommand, ButtonHandler {
     }
 
     private void handleRestore(SlashCommandInteractionEvent event) {
-        String id = event.getOption("id", OptionMapping::getAsString);
+        String id = outfitIdOption(event);
         if (id == null || id.isBlank()) {
             event.reply("You must provide an outfit ID.").setEphemeral(true).queue();
             return;

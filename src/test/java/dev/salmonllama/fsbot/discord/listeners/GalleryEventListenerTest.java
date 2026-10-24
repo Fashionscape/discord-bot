@@ -31,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -180,8 +181,7 @@ class GalleryEventListenerTest {
         verifyNoInteractions(minioStorageService, outfitRepository);
     }
 
-    @Test
-    void testSuccessfulImageUploadAndPost() throws Exception {
+    private void stubGalleryImageUpload() throws Exception {
         when(messageEvent.getAuthor()).thenReturn(author);
         when(author.isBot()).thenReturn(false);
         when(messageEvent.isWebhookMessage()).thenReturn(false);
@@ -212,6 +212,12 @@ class GalleryEventListenerTest {
         when(channel.sendMessageEmbeds(any(MessageEmbed.class))).thenReturn(messageCreateAction);
         when(messageCreateAction.setActionRow(any(), any())).thenReturn(messageCreateAction);
 
+    }
+
+    @Test
+    void testSuccessfulImageUploadAndPost() throws Exception {
+        stubGalleryImageUpload();
+
         listener.onMessageReceived(messageEvent);
 
         ArgumentCaptor<OutfitEntity> outfitCaptor = ArgumentCaptor.forClass(OutfitEntity.class);
@@ -224,9 +230,32 @@ class GalleryEventListenerTest {
         assertEquals("https://media.fashionscape.org/outfits/id.png", savedOutfit.getLink());
         assertEquals("srv-1", savedOutfit.getServerId());
         assertEquals("chan-gallery", savedOutfit.getChannelId());
+        assertDoesNotThrow(() -> UUID.fromString(savedOutfit.getId()));
+        assertEquals(36, savedOutfit.getId().length());
+        verify(minioStorageService).uploadOutfitFromUrl(eq(savedOutfit.getId()), anyString());
         verify(auditService).record(any(), eq(AuditService.Action.OUTFIT_ADDED), eq("user-1"), eq("srv-1"),
                 eq(AuditService.TARGET_OUTFIT), eq(savedOutfit.getId()), any());
         verify(messageCreateAction).queue(any(), any());
+    }
+
+    @Test
+    void testGeneratedOutfitIdAlreadyInUseIsReplaced() throws Exception {
+        stubGalleryImageUpload();
+        when(outfitRepository.existsById(anyString())).thenReturn(true, false);
+
+        listener.onMessageReceived(messageEvent);
+
+        ArgumentCaptor<String> checkedIds = ArgumentCaptor.forClass(String.class);
+        verify(outfitRepository, times(2)).existsById(checkedIds.capture());
+        String takenId = checkedIds.getAllValues().get(0);
+        String freshId = checkedIds.getAllValues().get(1);
+        assertNotEquals(takenId, freshId);
+
+        ArgumentCaptor<OutfitEntity> outfitCaptor = ArgumentCaptor.forClass(OutfitEntity.class);
+        verify(outfitRepository).save(outfitCaptor.capture());
+        assertEquals(freshId, outfitCaptor.getValue().getId());
+        verify(minioStorageService).uploadOutfitFromUrl(eq(freshId), anyString());
+        verify(minioStorageService, never()).uploadOutfitFromUrl(eq(takenId), anyString());
     }
 
     @Test

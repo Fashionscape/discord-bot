@@ -103,7 +103,7 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
 
         for (Message.Attachment attachment : imageAttachments) {
             try {
-                String outfitId = IdService.generateShort();
+                String outfitId = newOutfitId();
                 String sourceUrl = attachment.getUrl();
 
                 UploadResult uploadResult = minioStorageService.uploadOutfitFromUrl(outfitId, sourceUrl);
@@ -161,6 +161,20 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
                 logger.error("Failed to process gallery upload for user {} in channel {}", userId, channelId, e);
             }
         }
+    }
+
+    /**
+     * Picks an ID no existing outfit uses. The ID also names the stored image, so a reused ID would
+     * overwrite another outfit's row and image. Full UUIDs make a clash vanishingly unlikely, and the
+     * check covers the legacy 8-character IDs too.
+     */
+    private String newOutfitId() {
+        String id = IdService.generate();
+        while (outfitRepository.existsById(id)) {
+            logger.warn("Generated outfit ID {} is already in use, generating another", id);
+            id = IdService.generate();
+        }
+        return id;
     }
 
     @Override

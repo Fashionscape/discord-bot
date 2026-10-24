@@ -10,6 +10,6 @@ public class RoleGroup extends DatabaseModel {
     public String requiredRole;
 
     public RoleGroup() {
-        this.id = IdService.generateShort();
+        this.id = IdService.generate();
     }
 }
