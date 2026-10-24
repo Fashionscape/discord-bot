@@ -38,12 +38,9 @@ dependencies {
     // Object Storage
     implementation platform('software.amazon.awssdk:bom:2.56.0')
     implementation ('software.amazon.awssdk:s3') {
-        // Use the JDK-based HTTP client below. Spring Boot pins Apache HttpClient 5 older than
-        // apache5-client needs, and the Netty client is only for the async API we don't use.
-        exclude module: 'apache5-client'
+        // The Netty client is only for the async API we don't use
         exclude module: 'netty-nio-client'
     }
-    implementation 'software.amazon.awssdk:url-connection-client'
 
     // Discord Library (JDA 5)
     implementation ('net.dv8tion:JDA:5.1.0') {
