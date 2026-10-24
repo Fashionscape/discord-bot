@@ -10,7 +10,7 @@ import dev.salmonllama.fsbot.services.BlocklistService;
 import dev.salmonllama.fsbot.services.AuditService;
 import dev.salmonllama.fsbot.services.OutfitService;
 import dev.salmonllama.fsbot.services.PermissionService;
-import dev.salmonllama.fsbot.storage.MinioStorageService;
+import dev.salmonllama.fsbot.storage.SeaweedStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.*;
@@ -53,7 +53,7 @@ class GalleryEventListenerTest {
     private OutfitService outfitService;
 
     @Mock
-    private MinioStorageService minioStorageService;
+    private SeaweedStorageService storageService;
 
     @Mock
     private BlocklistService blocklistService;
@@ -109,7 +109,7 @@ class GalleryEventListenerTest {
                 galleryChannelRepository,
                 outfitRepository,
                 outfitService,
-                minioStorageService,
+                storageService,
                 blocklistService,
                 new PermissionService(staticPermissionRepository, properties),
                 auditService
@@ -131,7 +131,7 @@ class GalleryEventListenerTest {
 
         listener.onMessageReceived(messageEvent);
 
-        verifyNoInteractions(galleryChannelRepository, minioStorageService, outfitRepository);
+        verifyNoInteractions(galleryChannelRepository, storageService, outfitRepository);
     }
 
     @Test
@@ -143,7 +143,7 @@ class GalleryEventListenerTest {
 
         listener.onMessageReceived(messageEvent);
 
-        verifyNoInteractions(galleryChannelRepository, minioStorageService, outfitRepository);
+        verifyNoInteractions(galleryChannelRepository, storageService, outfitRepository);
     }
 
     @Test
@@ -162,7 +162,7 @@ class GalleryEventListenerTest {
 
         listener.onMessageReceived(messageEvent);
 
-        verifyNoInteractions(galleryChannelRepository, minioStorageService, outfitRepository);
+        verifyNoInteractions(galleryChannelRepository, storageService, outfitRepository);
     }
 
     @Test
@@ -182,7 +182,7 @@ class GalleryEventListenerTest {
 
         listener.onMessageReceived(messageEvent);
 
-        verifyNoInteractions(minioStorageService, outfitRepository);
+        verifyNoInteractions(storageService, outfitRepository);
     }
 
     @Test
@@ -211,7 +211,7 @@ class GalleryEventListenerTest {
         when(message.getAttachments()).thenReturn(List.of(attachment));
 
         UploadResult uploadResult = new UploadResult("outfits/id.png", "https://media.fashionscape.org/outfits/id.png", "bucket", 1024, "image/png");
-        when(minioStorageService.uploadOutfitFromUrl(anyString(), eq("https://cdn.discordapp.com/attachments/1/2/pic.png")))
+        when(storageService.uploadOutfitFromUrl(anyString(), eq("https://cdn.discordapp.com/attachments/1/2/pic.png")))
                 .thenReturn(uploadResult);
 
         when(channel.sendMessageEmbeds(any(MessageEmbed.class))).thenReturn(messageCreateAction);

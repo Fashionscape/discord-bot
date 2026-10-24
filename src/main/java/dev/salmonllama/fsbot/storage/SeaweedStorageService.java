@@ -1,12 +1,23 @@
 package dev.salmonllama.fsbot.storage;
 
 import dev.salmonllama.fsbot.config.BotProperties;
-import io.minio.*;
-import io.minio.errors.ErrorResponseException;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.PutBucketPolicyRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -20,34 +31,34 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Object storage for outfit images. The bot runs SeaweedFS and talks to its S3 gateway through the
- * MinIO Java client, which works with any S3-compatible server (see docs/adr/0001-seaweedfs-object-storage.md).
+ * Object storage for outfit images, kept in SeaweedFS and accessed through its S3 gateway with the
+ * AWS SDK for Java v2 (see docs/adr/0001-seaweedfs-object-storage.md).
  */
 @Service
-public class MinioStorageService {
+public class SeaweedStorageService {
 
-    private static final Logger logger = LoggerFactory.getLogger(MinioStorageService.class);
+    private static final Logger logger = LoggerFactory.getLogger(SeaweedStorageService.class);
 
     /** Objects under this prefix are publicly readable through the bucket policy. */
     public static final String PUBLIC_PREFIX = "outfits/";
     /** Images of deleted outfits are kept under this prefix, which the bucket policy doesn't expose. */
     public static final String QUARANTINE_PREFIX = "deleted/";
 
-    private final MinioClient minioClient;
+    private final S3Client s3Client;
     private final BotProperties properties;
     private final HttpClient httpClient;
     private volatile boolean bucketReady = false;
 
     @org.springframework.beans.factory.annotation.Autowired
-    public MinioStorageService(MinioClient minioClient, BotProperties properties) {
-        this(minioClient, properties, HttpClient.newBuilder()
+    public SeaweedStorageService(S3Client s3Client, BotProperties properties) {
+        this(s3Client, properties, HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .build());
     }
 
-    public MinioStorageService(MinioClient minioClient, BotProperties properties, HttpClient httpClient) {
-        this.minioClient = minioClient;
+    public SeaweedStorageService(S3Client s3Client, BotProperties properties, HttpClient httpClient) {
+        this.s3Client = s3Client;
         this.properties = properties;
         this.httpClient = httpClient;
     }
@@ -78,10 +89,7 @@ public class MinioStorageService {
 
     void applyPublicReadPolicy() throws Exception {
         String bucket = properties.seaweed().bucket();
-        minioClient.setBucketPolicy(SetBucketPolicyArgs.builder()
-                .bucket(bucket)
-                .config(publicReadPolicy(bucket))
-                .build());
+        s3Client.putBucketPolicy(PutBucketPolicyRequest.builder().bucket(bucket).policy(publicReadPolicy(bucket)).build());
         logger.info("SeaweedFS bucket '{}' policy set: public read on '{}*' only", bucket, PUBLIC_PREFIX);
     }
 
@@ -103,9 +111,10 @@ public class MinioStorageService {
      */
     public void ensureBucketExists() throws Exception {
         String bucket = properties.seaweed().bucket();
-        boolean exists = minioClient.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
-        if (!exists) {
-            minioClient.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+        try {
+            s3Client.headBucket(HeadBucketRequest.builder().bucket(bucket).build());
+        } catch (NoSuchBucketException e) {
+            s3Client.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
             logger.info("SeaweedFS bucket '{}' created successfully", bucket);
         }
     }
@@ -117,17 +126,19 @@ public class MinioStorageService {
         ensureReady();
 
         String bucket = properties.seaweed().bucket();
-        long partSize = size >= 0 ? -1 : 10 * 1024 * 1024; // 10MB chunk size for streams of unknown length
         String resolvedContentType = (contentType != null && !contentType.isBlank()) ? contentType : "application/octet-stream";
 
-        minioClient.putObject(
-                PutObjectArgs.builder()
-                        .bucket(bucket)
-                        .object(objectName)
-                        .stream(inputStream, size, partSize)
-                        .contentType(resolvedContentType)
-                        .build()
-        );
+        // S3 needs the length up front; read streams of unknown length into memory first
+        RequestBody body;
+        if (size >= 0) {
+            body = RequestBody.fromInputStream(inputStream, size);
+        } else {
+            byte[] data = inputStream.readAllBytes();
+            size = data.length;
+            body = RequestBody.fromBytes(data);
+        }
+
+        s3Client.putObject(PutObjectRequest.builder().bucket(bucket).key(objectName).contentType(resolvedContentType).build(), body);
 
         String publicUrl = getPublicUrl(objectName);
         logger.debug("Uploaded object '{}' ({} bytes) to bucket '{}', public URL: {}", objectName, size, bucket, publicUrl);
@@ -192,12 +203,7 @@ public class MinioStorageService {
      */
     public InputStream getObject(String objectName) throws Exception {
         String bucket = properties.seaweed().bucket();
-        return minioClient.getObject(
-                GetObjectArgs.builder()
-                        .bucket(bucket)
-                        .object(objectName)
-                        .build()
-        );
+        return s3Client.getObject(GetObjectRequest.builder().bucket(bucket).key(objectName).build());
     }
 
     /**
@@ -214,12 +220,7 @@ public class MinioStorageService {
      */
     public void deleteObject(String objectName) throws Exception {
         String bucket = properties.seaweed().bucket();
-        minioClient.removeObject(
-                RemoveObjectArgs.builder()
-                        .bucket(bucket)
-                        .object(objectName)
-                        .build()
-        );
+        s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(objectName).build());
         logger.info("Deleted object '{}' from bucket '{}'", objectName, bucket);
     }
 
@@ -254,12 +255,11 @@ public class MinioStorageService {
             return;
         }
         String bucket = properties.seaweed().bucket();
-        minioClient.copyObject(CopyObjectArgs.builder()
-                .bucket(bucket)
-                .object(to)
-                .source(CopySource.builder().bucket(bucket).object(from).build())
+        s3Client.copyObject(CopyObjectRequest.builder()
+                .sourceBucket(bucket).sourceKey(from)
+                .destinationBucket(bucket).destinationKey(to)
                 .build());
-        minioClient.removeObject(RemoveObjectArgs.builder().bucket(bucket).object(from).build());
+        s3Client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(from).build());
         logger.info("Moved object '{}' to '{}' in bucket '{}'", from, to, bucket);
     }
 
@@ -269,15 +269,12 @@ public class MinioStorageService {
     public boolean objectExists(String objectName) {
         String bucket = properties.seaweed().bucket();
         try {
-            minioClient.statObject(
-                    StatObjectArgs.builder()
-                            .bucket(bucket)
-                            .object(objectName)
-                            .build()
-            );
+            s3Client.headObject(HeadObjectRequest.builder().bucket(bucket).key(objectName).build());
             return true;
-        } catch (ErrorResponseException e) {
-            if ("NoSuchKey".equals(e.errorResponse().code())) {
+        } catch (NoSuchKeyException e) {
+            return false;
+        } catch (S3Exception e) {
+            if (e.statusCode() == 404) {
                 return false;
             }
             logger.warn("Error checking existence of object '{}' in bucket '{}': {}", objectName, bucket, e.getMessage());

@@ -2,7 +2,7 @@ package dev.salmonllama.fsbot.services;
 
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
-import dev.salmonllama.fsbot.storage.MinioStorageService;
+import dev.salmonllama.fsbot.storage.SeaweedStorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,7 +29,7 @@ class OutfitServiceTest {
     private OutfitRepository outfitRepository;
 
     @Mock
-    private MinioStorageService storageService;
+    private SeaweedStorageService storageService;
 
     @Mock
     private AuditService auditService;
@@ -232,7 +232,7 @@ class OutfitServiceTest {
         OutfitEntity outfit = createSampleOutfit("del-me");
         stubImageKey(outfit);
         when(outfitRepository.findByIdAndDeletedFalse("del-me")).thenReturn(Optional.of(outfit));
-        doThrow(new RuntimeException("MinIO down")).when(storageService).quarantine("outfits/del-me.png");
+        doThrow(new RuntimeException("SeaweedFS down")).when(storageService).quarantine("outfits/del-me.png");
 
         assertThrows(OutfitService.OutfitImageException.class,
                 () -> outfitService.delete("del-me", "user-1", "server-1", null));

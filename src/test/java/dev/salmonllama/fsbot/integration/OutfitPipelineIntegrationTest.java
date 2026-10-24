@@ -6,7 +6,7 @@ import dev.salmonllama.fsbot.database.repositories.GalleryChannelRepository;
 import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
 import dev.salmonllama.fsbot.services.BlocklistService;
 import dev.salmonllama.fsbot.services.OutfitService;
-import dev.salmonllama.fsbot.storage.MinioStorageService;
+import dev.salmonllama.fsbot.storage.SeaweedStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -62,7 +62,7 @@ class OutfitPipelineIntegrationTest {
     }
 
     @Autowired
-    private MinioStorageService minioStorageService;
+    private SeaweedStorageService storageService;
 
     @Autowired
     private OutfitRepository outfitRepository;
@@ -78,7 +78,7 @@ class OutfitPipelineIntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        minioStorageService.prepareBucket();
+        storageService.prepareBucket();
         outfitRepository.deleteAll();
         galleryChannelRepository.deleteAll();
     }
@@ -102,11 +102,11 @@ class OutfitPipelineIntegrationTest {
         // 2. Upload outfit image to SeaweedFS
         String outfitId = "fit-pipeline-1";
         byte[] imageBytes = "fake-png-image-content".getBytes(StandardCharsets.UTF_8);
-        UploadResult uploadResult = minioStorageService.uploadOutfit(outfitId, imageBytes, "image/png");
+        UploadResult uploadResult = storageService.uploadOutfit(outfitId, imageBytes, "image/png");
 
         assertNotNull(uploadResult);
         assertEquals("outfits/fit-pipeline-1.png", uploadResult.objectName());
-        assertTrue(minioStorageService.objectExists("outfits/fit-pipeline-1.png"));
+        assertTrue(storageService.objectExists("outfits/fit-pipeline-1.png"));
 
         // 3. Save outfit entity in PostgreSQL
         String submitterId = "user-999";
@@ -139,9 +139,9 @@ class OutfitPipelineIntegrationTest {
         assertFalse(entity.isDeleted());
 
         // Verify image bytes can be read back from SeaweedFS using public URL key extraction
-        Optional<String> objectKey = minioStorageService.extractObjectKey(entity.getLink());
+        Optional<String> objectKey = storageService.extractObjectKey(entity.getLink());
         assertTrue(objectKey.isPresent());
-        byte[] readBackBytes = minioStorageService.getObjectBytes(objectKey.get());
+        byte[] readBackBytes = storageService.getObjectBytes(objectKey.get());
         assertArrayEquals(imageBytes, readBackBytes);
 
         // 5. Upvote: one vote per user, counted in PostgreSQL
@@ -172,18 +172,18 @@ class OutfitPipelineIntegrationTest {
         assertNotNull(deleted.getDeletedAt());
 
         // The image is kept, but only under the quarantine prefix
-        assertFalse(minioStorageService.objectExists("outfits/fit-pipeline-1.png"));
-        assertTrue(minioStorageService.objectExists("deleted/outfits/fit-pipeline-1.png"));
+        assertFalse(storageService.objectExists("outfits/fit-pipeline-1.png"));
+        assertTrue(storageService.objectExists("deleted/outfits/fit-pipeline-1.png"));
         assertArrayEquals(imageBytes, outfitService.getDeletedImage(deleted).orElseThrow().data());
 
         // 8. Restore moves it back
         assertTrue(outfitService.restore(outfitId, "staff-1", guildId, null));
         assertTrue(outfitRepository.findByIdAndDeletedFalse(outfitId).isPresent());
-        assertTrue(minioStorageService.objectExists("outfits/fit-pipeline-1.png"));
-        assertFalse(minioStorageService.objectExists("deleted/outfits/fit-pipeline-1.png"));
+        assertTrue(storageService.objectExists("outfits/fit-pipeline-1.png"));
+        assertFalse(storageService.objectExists("deleted/outfits/fit-pipeline-1.png"));
 
         // Clean up SeaweedFS object
-        minioStorageService.deleteObject("outfits/fit-pipeline-1.png");
-        assertFalse(minioStorageService.objectExists("outfits/fit-pipeline-1.png"));
+        storageService.deleteObject("outfits/fit-pipeline-1.png");
+        assertFalse(storageService.objectExists("outfits/fit-pipeline-1.png"));
     }
 }

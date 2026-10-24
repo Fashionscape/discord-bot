@@ -2,7 +2,7 @@ package dev.salmonllama.fsbot.services;
 
 import dev.salmonllama.fsbot.database.entities.OutfitEntity;
 import dev.salmonllama.fsbot.database.repositories.OutfitRepository;
-import dev.salmonllama.fsbot.storage.MinioStorageService;
+import dev.salmonllama.fsbot.storage.SeaweedStorageService;
 import net.dv8tion.jda.api.JDA;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,10 +23,10 @@ public class OutfitService {
     private static final Logger logger = LoggerFactory.getLogger(OutfitService.class);
 
     private final OutfitRepository outfitRepository;
-    private final MinioStorageService storageService;
+    private final SeaweedStorageService storageService;
     private final AuditService auditService;
 
-    public OutfitService(OutfitRepository outfitRepository, MinioStorageService storageService, AuditService auditService) {
+    public OutfitService(OutfitRepository outfitRepository, SeaweedStorageService storageService, AuditService auditService) {
         this.outfitRepository = outfitRepository;
         this.storageService = storageService;
         this.auditService = auditService;
@@ -215,7 +215,7 @@ public class OutfitService {
     public Optional<StoredImage> getDeletedImage(OutfitEntity outfit) {
         return publicImageKey(outfit).flatMap(key -> {
             try {
-                byte[] data = storageService.getObjectBytes(MinioStorageService.QUARANTINE_PREFIX + key);
+                byte[] data = storageService.getObjectBytes(SeaweedStorageService.QUARANTINE_PREFIX + key);
                 return Optional.of(new StoredImage(key.substring(key.lastIndexOf('/') + 1), data));
             } catch (Exception e) {
                 logger.warn("Could not read quarantined image for outfit {}", outfit.getId(), e);
@@ -233,7 +233,7 @@ public class OutfitService {
      */
     private Optional<String> publicImageKey(OutfitEntity outfit) {
         return storageService.extractObjectKey(outfit.getLink())
-                .filter(key -> key.startsWith(MinioStorageService.PUBLIC_PREFIX));
+                .filter(key -> key.startsWith(SeaweedStorageService.PUBLIC_PREFIX));
     }
 
     private void moveImage(String publicKey, boolean toQuarantine) {

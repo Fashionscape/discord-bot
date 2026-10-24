@@ -15,14 +15,14 @@ class BotPropertiesTest {
     @Test
     void testDefaultValues() {
         BotProperties.DiscordProperties discord = new BotProperties.DiscordProperties("", 0L, "", "");
-        BotProperties.SeaweedProperties minio = new BotProperties.SeaweedProperties(
+        BotProperties.SeaweedProperties seaweed = new BotProperties.SeaweedProperties(
                 "http://localhost:8333",
                 "seaweedadmin",
                 "seaweedadmin",
                 "fashionscape-outfits",
                 "https://media.fashionscape.org"
         );
-        BotProperties properties = new BotProperties(discord, minio);
+        BotProperties properties = new BotProperties(discord, seaweed);
 
         assertEquals("", properties.discord().token());
         assertEquals(0L, properties.discord().ownerId());

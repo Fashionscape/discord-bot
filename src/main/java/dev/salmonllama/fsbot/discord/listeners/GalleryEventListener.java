@@ -10,7 +10,7 @@ import dev.salmonllama.fsbot.services.BlocklistService;
 import dev.salmonllama.fsbot.services.IdService;
 import dev.salmonllama.fsbot.services.OutfitService;
 import dev.salmonllama.fsbot.services.PermissionService;
-import dev.salmonllama.fsbot.storage.MinioStorageService;
+import dev.salmonllama.fsbot.storage.SeaweedStorageService;
 import dev.salmonllama.fsbot.storage.UploadResult;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.Member;
@@ -42,7 +42,7 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
     private final GalleryChannelRepository galleryChannelRepository;
     private final OutfitRepository outfitRepository;
     private final OutfitService outfitService;
-    private final MinioStorageService minioStorageService;
+    private final SeaweedStorageService storageService;
     private final BlocklistService blocklistService;
     private final PermissionService permissionService;
     private final AuditService auditService;
@@ -51,7 +51,7 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
             GalleryChannelRepository galleryChannelRepository,
             OutfitRepository outfitRepository,
             OutfitService outfitService,
-            MinioStorageService minioStorageService,
+            SeaweedStorageService storageService,
             BlocklistService blocklistService,
             PermissionService permissionService,
             AuditService auditService
@@ -59,7 +59,7 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
         this.galleryChannelRepository = galleryChannelRepository;
         this.outfitRepository = outfitRepository;
         this.outfitService = outfitService;
-        this.minioStorageService = minioStorageService;
+        this.storageService = storageService;
         this.blocklistService = blocklistService;
         this.permissionService = permissionService;
         this.auditService = auditService;
@@ -110,7 +110,7 @@ public class GalleryEventListener extends ListenerAdapter implements ButtonHandl
                 String outfitId = IdService.generateShort();
                 String sourceUrl = attachment.getUrl();
 
-                UploadResult uploadResult = minioStorageService.uploadOutfitFromUrl(outfitId, sourceUrl);
+                UploadResult uploadResult = storageService.uploadOutfitFromUrl(outfitId, sourceUrl);
 
                 String tag = gallery.getTag() != null && !gallery.getTag().isBlank() ? gallery.getTag() : "general";
                 String meta = event.getMessage().getContentRaw();

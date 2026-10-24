@@ -32,7 +32,7 @@ Items 1–3 of that review (cross-server staff permissions, vote integrity, dele
 ## Review: Security & Hardening
 
 ### Gallery Upload Validation
-**What:** Cap attachment size before downloading, allow only `image/png`, `image/jpeg`, `image/gif`, and `image/webp`, and verify the file's magic bytes instead of trusting the filename (`isImage`) and the reported `Content-Type`. Stream to object storage rather than reading the whole body into memory (`MinioStorageService.uploadOutfitFromUrl`).
+**What:** Cap attachment size before downloading, allow only `image/png`, `image/jpeg`, `image/gif`, and `image/webp`, and verify the file's magic bytes instead of trusting the filename (`isImage`) and the reported `Content-Type`. Stream to object storage rather than reading the whole body into memory (`SeaweedStorageService.uploadOutfitFromUrl`).
 **Why:** A large attachment can exhaust the 3.5 GB heap, and arbitrary content types end up served from the public media domain.
 
 ### Docker Compose Hardening
@@ -58,7 +58,7 @@ Items 1–3 of that review (cross-server staff permissions, vote integrity, dele
 **Why:** Discord caps component IDs at 100 characters, so long tags throw an error, and a tag containing `:` breaks the parser in `OutfitSlashCommand.handle`.
 
 ### Imgur Rehost Fixes
-**What:** Disable redirect-following (or reject `removed.png`) in `ImgurToMinioRehostService`, and move `updateOutfitLink` into a separate bean so its `@Transactional` actually applies.
+**What:** Disable redirect-following (or reject `removed.png`) in `ImgurToSeaweedRehostService`, and move `updateOutfitLink` into a separate bean so its `@Transactional` actually applies.
 **Why:** Imgur redirects removed images to a placeholder, which the tool would rehost over the real link. The transaction annotation is currently ignored because of self-invocation.
 
 ### Cheaper Message Handling

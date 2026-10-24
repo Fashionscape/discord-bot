@@ -26,7 +26,7 @@ Welcome to the **FashionScape Bot** repository. This document serves as a compre
 | **Discord Library** | JDA (`5.1.0`) | Discord API v10 with native slash commands, button interactions, and virtual thread event loop. Javacord retained temporarily for transition. |
 | **Application Framework** | Spring Boot (`3.3.4`) | Dependency injection, `@ConfigurationProperties`, Actuator health/metrics, and Spring Data JPA. |
 | **Database** | PostgreSQL 16+ & SQLite | PostgreSQL managed via Flyway migrations (`V1__init_schema.sql`) and Spring Data JPA; SQLite retained for legacy migration CLI. |
-| **Media Storage** | SeaweedFS S3 gateway, accessed with the MinIO Java client (`io.minio:minio:8.5.12`) | Self-hosted S3 object storage for gallery outfit images with public CDN URL resolution; automated Imgur rehost CLI. See `docs/adr/0001-seaweedfs-object-storage.md`. |
+| **Media Storage** | SeaweedFS S3 gateway, accessed with the AWS SDK for Java v2 (`software.amazon.awssdk:s3`) | Self-hosted S3 object storage for gallery outfit images with public CDN URL resolution; automated Imgur rehost CLI. See `docs/adr/0001-seaweedfs-object-storage.md`. |
 | **Configuration** | `application.yml` + `@ConfigurationProperties` | Centralized type-safe configuration in `BotProperties` (`fsbot.discord.*`, `fsbot.seaweed.*`). |
 | **JSON & HTTP Clients** | Java 21 `HttpClient`, OkHttp 4, Gson 2.11 | Java 21 native client for image ingestion and external APIs; OkHttp/Gson in legacy utilities. |
 | **Logging** | SLF4J with Logback | Structured console logging configured in `src/main/resources/logback.xml`. |
@@ -56,10 +56,10 @@ Welcome to the **FashionScape Bot** repository. This document serves as a compre
 │   │   │   │   │   └── general/        # Modern slash commands (PingSlashCommand, etc.)
 │   │   │   │   ├── components/         # ButtonHandler and interactive UI component routing
 │   │   │   │   └── listeners/          # GalleryEventListener with interactive voting & deletion buttons
-│   │   │   ├── storage/                # Object storage (SeaweedFS via the MinIO client)
-│   │   │   │   ├── MinioConfiguration.java # MinioClient Spring bean configuration
-│   │   │   │   ├── MinioStorageService.java# Asset upload, stream, and CDN public URL resolution
-│   │   │   │   └── migration/          # ImgurToMinioRehostCli & ImgurToMinioRehostService
+│   │   │   ├── storage/                # Object storage (SeaweedFS via the AWS SDK v2)
+│   │   │   │   ├── SeaweedConfiguration.java # S3Client Spring bean configuration
+│   │   │   │   ├── SeaweedStorageService.java# Asset upload, stream, and CDN public URL resolution
+│   │   │   │   └── migration/          # ImgurToSeaweedRehostCli & ImgurToSeaweedRehostService
 │   │   │   ├── database/               # Database access layer
 │   │   │   │   ├── entities/           # JPA entities (OutfitEntity, GalleryChannelEntity, etc.)
 │   │   │   │   ├── repositories/       # Spring Data JPA repositories
@@ -95,7 +95,7 @@ The primary Discord interface has migrated from legacy Javacord text parsing to 
 1. **Submission (`GalleryEventListener`):**
    - Listens for messages with image attachments in channels registered in `GalleryChannelRepository`.
    - Filters out bot authors, webhooks, non-guild messages, and blocked users/servers.
-   - Streams image attachments directly into SeaweedFS via `MinioStorageService.uploadOutfitFromUrl()`.
+   - Streams image attachments directly into SeaweedFS via `SeaweedStorageService.uploadOutfitFromUrl()`.
    - Persists an `OutfitEntity` into PostgreSQL via `OutfitRepository`.
 2. **Interactive Showcase & Voting Buttons:**
    - Automatically posts an outfit showcase embed into the gallery channel with interactive action row buttons:
@@ -108,8 +108,8 @@ The primary Discord interface has migrated from legacy Javacord text parsing to 
 - **Legacy Migration:** `SqliteToPostgresMigrationService` and `SqliteToPostgresMigrationCli` provide safe migration of legacy `fsbot.db` records into PostgreSQL.
 
 ### 4.4 Object Storage Architecture (SeaweedFS S3)
-- **`MinioStorageService`:** Configured via `MinioClient` bean in `MinioConfiguration`. Handles bucket initialization, image stream upload, extension resolution, existence checks, and public CDN URL formatting (`https://media.fashionscape.org/outfits/{id}.png`).
-- **`ImgurToMinioRehostCli` / `ImgurToMinioRehostService`:** Standalone CLI tool to scan existing outfit records pointing to Imgur, download images, re-upload them to SeaweedFS, and update PostgreSQL URLs.
+- **`SeaweedStorageService`:** Configured via the `S3Client` bean in `SeaweedConfiguration`. Handles bucket initialization, image stream upload, extension resolution, existence checks, and public CDN URL formatting (`https://media.fashionscape.org/outfits/{id}.png`).
+- **`ImgurToSeaweedRehostCli` / `ImgurToSeaweedRehostService`:** Standalone CLI tool to scan existing outfit records pointing to Imgur, download images, re-upload them to SeaweedFS, and update PostgreSQL URLs.
 
 ### 4.5 Security & Blocklist Subsystem
 - **`BlocklistService`:** Centralized service that verifies whether users or guilds are prohibited from bot commands and gallery submissions using `BlockedUserRepository` and `BlockedServerRepository`.
@@ -175,9 +175,9 @@ The project is executing the v3 modernization plan documented in `docs/v3_archit
   - Added JPA entities and Spring Data repositories.
   - Implemented `SqliteToPostgresMigrationService` and CLI runner.
 - [x] **Phase 3: Media Storage Migration (`feature/v3-phase3-minio`):**
-  - Integrated MinIO Java SDK via `MinioStorageService`.
+  - Integrated MinIO Java SDK via `MinioStorageService` (since replaced by SeaweedFS and the AWS SDK v2, see ADR 0001).
   - Added direct image stream ingestion from Discord CDN.
-  - Implemented `ImgurToMinioRehostCli` and migration service.
+  - Implemented `ImgurToSeaweedRehostCli` and migration service.
 - [x] **Phase 4: Discord Interaction & Gateway Refactor (`feature/v3-phase4-jda-interactions`):**
   - Integrated JDA 5.1.0 with Java 21 Virtual Threads.
   - Created `SlashCommand` interface and `SlashCommandDispatcher`.
